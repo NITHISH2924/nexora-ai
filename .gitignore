@@ -9,6 +9,10 @@ venv/
 .venv/
 .pytest_cache/
 
+# Binaries & Executables
+*.exe
+bin/
+
 # Environment Variables & Secrets
 .env
 .env.local
