@@ -1,9 +1,11 @@
 import os
 import re
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Any, Optional, Dict, List
 import aiosqlite
+
 try:
     import psycopg
     from psycopg.rows import dict_row
@@ -13,8 +15,103 @@ except ImportError:
 
 from backend.app.config import settings
 
-# Global PostgreSQL connection pool reference
-_pg_pool = None
+logger = logging.getLogger("database")
+
+# Canonical camelCase mapping for case-insensitive column lookups in PostgreSQL
+CAMEL_KEY_MAP = {
+    "userid": "userId",
+    "passwordhash": "passwordHash",
+    "accountcreatedat": "accountCreatedAt",
+    "lastloginat": "lastLoginAt",
+    "logincount": "loginCount",
+    "accountstatus": "accountStatus",
+    "emailverified": "emailVerified",
+    "emailverificationtoken": "emailVerificationToken",
+    "emailverificationtokenexpires": "emailVerificationTokenExpires",
+    "passwordresettoken": "passwordResetToken",
+    "passwordresettokenexpires": "passwordResetTokenExpires",
+    "conversationid": "conversationId",
+    "systemprompt": "systemPrompt",
+    "createdat": "createdAt",
+    "updatedat": "updatedAt",
+    "ispinned": "isPinned",
+    "isarchived": "isArchived",
+    "originalfilename": "originalFilename",
+    "filetype": "fileType",
+    "mimetype": "mimeType",
+    "filesize": "fileSize",
+    "storagepath": "storagePath",
+    "extractedtext": "extractedText",
+    "pagecount": "pageCount",
+    "negativeprompt": "negativePrompt",
+    "aspectratio": "aspectRatio",
+    "imagepath": "imagePath",
+    "imageurl": "imageUrl",
+    "projectid": "projectId",
+    "outputtype": "outputType",
+    "itemtype": "itemType",
+    "itemid": "itemId",
+    "displayname": "displayName",
+    "preferredlanguage": "preferredLanguage",
+    "aitone": "aiTone",
+    "custominstructions": "customInstructions",
+    "autospeakaudio": "autoSpeakAudio",
+    "codetheme": "codeTheme",
+    "enablememory": "enableMemory",
+    "isactive": "isActive",
+    "ipaddress": "ipAddress",
+    "useragent": "userAgent",
+}
+
+class CaseInsensitiveRow(dict):
+    """
+    Dictionary subclass providing case-insensitive key access and automatic
+    normalization to canonical camelCase keys expected by NEXORA AI services.
+    """
+    def __init__(self, data=None, **kwargs):
+        self._key_map = {}
+        super().__init__()
+        if data:
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    norm_k = CAMEL_KEY_MAP.get(str(k).lower(), k)
+                    self[norm_k] = v
+            else:
+                for k, v in data:
+                    norm_k = CAMEL_KEY_MAP.get(str(k).lower(), k)
+                    self[norm_k] = v
+        for k, v in kwargs.items():
+            norm_k = CAMEL_KEY_MAP.get(str(k).lower(), k)
+            self[norm_k] = v
+
+    def __setitem__(self, key, value):
+        norm_k = CAMEL_KEY_MAP.get(str(key).lower(), key) if hasattr(self, '_key_map') else key
+        super().__setitem__(norm_k, value)
+        if hasattr(self, '_key_map'):
+            self._key_map[str(key).lower()] = norm_k
+            self._key_map[str(norm_k).lower()] = norm_k
+
+    def __getitem__(self, key):
+        if super().__contains__(key):
+            return super().__getitem__(key)
+        lower_k = str(key).lower()
+        if hasattr(self, '_key_map') and lower_k in self._key_map:
+            return super().__getitem__(self._key_map[lower_k])
+        for actual_k in self.keys():
+            if str(actual_k).lower() == lower_k:
+                return super().__getitem__(actual_k)
+        raise KeyError(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key):
+        if super().__contains__(key):
+            return True
+        return str(key).lower() in (str(k).lower() for k in self.keys())
 
 def is_postgres() -> bool:
     """Check if DATABASE_URL is configured for PostgreSQL."""
@@ -44,37 +141,97 @@ class PgCursorWrapper:
         self._cursor = cursor
         self.lastrowid = lastrowid
 
-    async def fetchone(self) -> Optional[Dict[str, Any]]:
+    @property
+    def description(self):
+        return getattr(self._cursor, "description", None)
+
+    @property
+    def rowcount(self):
+        return getattr(self._cursor, "rowcount", -1)
+
+    async def fetchone(self) -> Optional[CaseInsensitiveRow]:
         row = await self._cursor.fetchone()
         if row is None:
             return None
         if isinstance(row, dict):
-            return row
-        # Map psycopg / asyncpg row
+            return CaseInsensitiveRow(row)
         try:
-            return dict(row)
+            return CaseInsensitiveRow(dict(row))
         except Exception:
             cols = [desc[0] for desc in self._cursor.description]
-            return dict(zip(cols, row))
+            return CaseInsensitiveRow(dict(zip(cols, row)))
 
-    async def fetchall(self) -> List[Dict[str, Any]]:
+    async def fetchall(self) -> List[CaseInsensitiveRow]:
         rows = await self._cursor.fetchall()
         if not rows:
             return []
         result = []
         for r in rows:
             if isinstance(r, dict):
-                result.append(r)
+                result.append(CaseInsensitiveRow(r))
             else:
                 try:
-                    result.append(dict(r))
+                    result.append(CaseInsensitiveRow(dict(r)))
                 except Exception:
                     cols = [desc[0] for desc in self._cursor.description]
-                    result.append(dict(zip(cols, r)))
+                    result.append(CaseInsensitiveRow(dict(zip(cols, r))))
         return result
 
     async def __aenter__(self):
         return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+class DummyCursor:
+    async def fetchone(self): return None
+    async def fetchall(self): return []
+    async def __aenter__(self): return self
+    async def __aexit__(self, *args): pass
+    @property
+    def description(self): return None
+    @property
+    def rowcount(self): return 0
+    @property
+    def lastrowid(self): return None
+
+class PgExecuteContextManager:
+    """
+    Dual-purpose executor supporting BOTH:
+      1. `cursor = await db.execute(sql, params)`
+      2. `async with db.execute(sql, params) as cursor:`
+    """
+    def __init__(self, conn, sql: str, params: Any = None):
+        self._conn = conn
+        self._sql = sql
+        self._params = params
+        self._cursor_wrapper = None
+
+    async def _execute(self) -> PgCursorWrapper:
+        if self._cursor_wrapper is None:
+            clean_sql = self._conn._convert_sql(self._sql)
+            if clean_sql.strip().upper().startswith("PRAGMA"):
+                self._cursor_wrapper = DummyCursor()
+                return self._cursor_wrapper
+
+            cur = self._conn._conn.cursor()
+            if self._params is not None:
+                if isinstance(self._params, (list, tuple)):
+                    await cur.execute(clean_sql, self._params)
+                elif isinstance(self._params, dict):
+                    await cur.execute(clean_sql, self._params)
+                else:
+                    await cur.execute(clean_sql, (self._params,))
+            else:
+                await cur.execute(clean_sql)
+            self._cursor_wrapper = PgCursorWrapper(cur)
+        return self._cursor_wrapper
+
+    def __await__(self):
+        return self._execute().__await__()
+
+    async def __aenter__(self) -> PgCursorWrapper:
+        return await self._execute()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
@@ -94,28 +251,8 @@ class PgConnectionWrapper:
         converted = re.sub(r'INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT', 'SERIAL PRIMARY KEY', converted, flags=re.IGNORECASE)
         return converted
 
-    async def execute(self, sql: str, params: Any = None) -> PgCursorWrapper:
-        clean_sql = self._convert_sql(sql)
-        # Ignore SQLite PRAGMAs on PostgreSQL
-        if clean_sql.strip().upper().startswith("PRAGMA"):
-            class DummyCursor:
-                async def fetchone(self): return None
-                async def fetchall(self): return []
-                async def __aenter__(self): return self
-                async def __aexit__(self, *args): pass
-            return DummyCursor()
-
-        cur = self._conn.cursor()
-        if params is not None:
-            if isinstance(params, (list, tuple)):
-                await cur.execute(clean_sql, params)
-            elif isinstance(params, dict):
-                await cur.execute(clean_sql, params)
-            else:
-                await cur.execute(clean_sql, (params,))
-        else:
-            await cur.execute(clean_sql)
-        return PgCursorWrapper(cur)
+    def execute(self, sql: str, params: Any = None) -> PgExecuteContextManager:
+        return PgExecuteContextManager(self, sql, params)
 
     async def commit(self):
         await self._conn.commit()
@@ -136,8 +273,8 @@ async def get_db() -> AsyncGenerator[Any, None]:
     init_db_sync()
 
     if is_postgres():
-        import psycopg
-        from psycopg.rows import dict_row
+        if psycopg is None:
+            raise RuntimeError("PostgreSQL driver 'psycopg' is not installed. Please install 'psycopg[binary]'.")
         conn_str = get_normalized_pg_url()
         raw_conn = await psycopg.AsyncConnection.connect(conn_str, row_factory=dict_row)
         wrapped = PgConnectionWrapper(raw_conn)
@@ -299,6 +436,7 @@ async def create_tables():
             );
             """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_notes_projId ON project_notes(projectId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_notes_userId ON project_notes(userId);")
 
             await db.execute("""
             CREATE TABLE IF NOT EXISTS project_saved_outputs (
@@ -315,6 +453,7 @@ async def create_tables():
             );
             """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_outputs_projId ON project_saved_outputs(projectId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_outputs_userId ON project_saved_outputs(userId);")
 
             await db.execute("""
             CREATE TABLE IF NOT EXISTS project_items (
@@ -330,6 +469,7 @@ async def create_tables():
             );
             """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_items_projId ON project_items(projectId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_items_userId ON project_items(userId);")
 
             await db.execute("""
             CREATE TABLE IF NOT EXISTS user_preferences (
