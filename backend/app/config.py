@@ -117,11 +117,22 @@ def is_leadership_query(text: str) -> bool:
         "who owns nexora ai", "who owns nexora ai?",
         "who is the ceo of nexora", "who is the ceo of nexora?",
         "who is the ceo of nexora ai", "who is the ceo of nexora ai?",
+        "who is the owner of nexora", "who is the owner of nexora?",
+        "who is the owner of nexora ai", "who is the owner of nexora ai?",
         "who created nexora", "who created nexora?",
         "who created nexora ai", "who created nexora ai?",
         "tell me about the leadership of nexora ai", "tell me about the leadership of nexora ai?",
         "tell me about the leadership of nexora", "tell me about the leadership of nexora?",
         "tell me about the leadership", "tell me about the leadership?",
+        "tell me about the ceo of nexora ai", "tell me about the ceo of nexora ai.",
+        "tell me about the owner of nexora ai", "tell me about the owner of nexora ai.",
+        "tell me about the ceo", "tell me about the ceo?",
+        "tell me about the owner", "tell me about the owner?",
+        "who are the owner and ceo", "who are the owner and ceo?",
+        "who is the owner and ceo", "who is the owner and ceo?",
+        "who is the owner and ceo of this app", "who is the owner and ceo of this app?",
+        "who is the owner of this app", "who is the owner of this app?",
+        "who is the ceo of this app", "who is the ceo of this app?",
         "who is your owner", "who is your owner?",
         "who is your ceo", "who is your ceo?",
         "who is your creator", "who is your creator?",
@@ -138,9 +149,9 @@ def is_leadership_query(text: str) -> bool:
         return True
         
     regex_patterns = [
-        r"\b(who|tell me about|what is the name of|names? of)\b.*\b(owner|ceo|founder|creator|leadership|leaders|running|built|created|founded|owns)\b",
+        r"\b(who|tell me about|what is the name of|names? of|what are the names of)\b.*\b(owner|ceo|founder|creator|leadership|leaders|running|built|created|founded|owns)\b",
         r"\b(who owns|who created|who founded|who made|who runs)\b",
-        r"\b(who is (the |your )?(owner|ceo|founder|creator))\b",
+        r"\b(who (is|are) (the |your )?(owner|ceo|founder|creator|leadership|leaders))\b",
         r"\b(owner|ceo|founder|creator|leadership)\b.*\b(nexora|platform|app|company|system)\b",
         r"\b(nexora|platform|app|company|system)\b.*\b(owner|ceo|founder|creator|leadership)\b"
     ]
