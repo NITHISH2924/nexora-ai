@@ -190,7 +190,7 @@ def audit_full_stack(base_url: str):
         "code": "print('NEXORA AI SECURE SANDBOX OK: ' + str(2026 + 1))"
     }).encode("utf-8")
     req_code = urllib.request.Request(
-        base_url + "/api/tools/execute/code",
+        base_url + "/api/tools/code/execute",
         data=code_payload,
         headers=auth_headers
     )
