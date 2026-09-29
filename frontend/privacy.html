@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — NEXORA AI</title>
+  <meta name="description" content="Privacy Policy for NEXORA AI mobile and web platform.">
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <style>
+    .legal-container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 24px 100px 24px;
+    }
+    .legal-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+    }
+    .legal-card {
+      background: var(--bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: 48px;
+      box-shadow: var(--shadow-modal);
+    }
+    .legal-card h1 {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--color-text-main);
+    }
+    .legal-meta {
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .legal-card h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-text-main);
+      margin-top: 32px;
+      margin-bottom: 12px;
+    }
+    .legal-card p, .legal-card li {
+      color: var(--color-text-secondary);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+    .legal-card strong {
+      color: var(--color-text-main);
+    }
+    .legal-card ul {
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+    .nav-back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--color-bright);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: color var(--transition-fast);
+    }
+    .nav-back-link:hover {
+      color: var(--color-text-main);
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow top-left"></div>
+  <div class="ambient-glow bottom-right"></div>
+
+  <div class="legal-container">
+    <div class="legal-nav">
+      <a href="/" class="nav-back-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back to Home
+      </a>
+      <button class="btn-theme-toggle" title="Switch to Black Theme" aria-label="Toggle Theme">
+        <span class="theme-icon-dark">🌙</span>
+      <span class="theme-icon-light" style="display:none;">☀️</span>
+      </button>
+    </div>
+
+    <div class="legal-card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <img src="/assets/logo.png" alt="NEXORA AI Logo" class="brand-logo-img" style="width:40px;height:40px;">
+        <span class="brand-title">NEXORA <span class="brand-accent">AI</span></span>
+      </div>
+
+      <h1>Privacy Policy</h1>
+      <div class="legal-meta">Last Updated: September 2026 • Compliant with GDPR, CCPA & Google Play User Data Policies</div>
+
+      <h2>1. Introduction</h2>
+      <p>NEXORA AI ("we", "our", or "us") is dedicated to safeguarding your privacy and ensuring your personal data is handled responsibly. This Privacy Policy explains how our Android mobile application and web platform collect, use, store, and protect your information.</p>
+
+      <h2>2. Data We Collect</h2>
+      <ul>
+        <li><strong>Account Information:</strong> Your email address and cryptographically hashed password when you create an account.</li>
+        <li><strong>User Generated Content:</strong> Conversations, text prompts, uploaded files (documents, images), project notes, and custom AI personalization preferences.</li>
+        <li><strong>Audio Data:</strong> Temporary microphone audio when using speech-to-text features, processed strictly for voice input transcription.</li>
+        <li><strong>Technical & Device Data:</strong> IP address, user-agent string, and timestamps for security audit logging, brute-force attack prevention, and session management.</li>
+      </ul>
+
+      <h2>3. How We Use Your Data</h2>
+      <ul>
+        <li>To provide, personalize, and maintain the NEXORA AI multi-modal assistant services.</li>
+        <li>To authenticate your identity and protect against unauthorized access.</li>
+        <li>To execute requested AI actions including reasoning, document analysis, image generation, and code generation.</li>
+        <li>To comply with legal obligations and enforce platform security policies.</li>
+      </ul>
+
+      <h2>4. AI Processing & Third-Party Providers</h2>
+      <p>NEXORA AI connects securely to enterprise AI inference providers (such as Google Gemini, OpenAI, Anthropic, or local neural engines). Your prompt data is transmitted solely for real-time inference. We do not sell your personal data or user content to third parties.</p>
+
+      <h2>5. Data Storage & Security</h2>
+      <p>All client-server communications are encrypted in transit using Transport Layer Security (TLS 1.2/1.3 / HTTPS). Authentication tokens are securely signed (JWT) and stored locally using Android hardware-backed KeyStore and EncryptedSharedPreferences. Database records enforce strict multi-tenant tenant isolation.</p>
+
+      <h2>6. Permissions Requested in Android App</h2>
+      <ul>
+        <li><strong>Internet:</strong> Required to communicate with the secure backend API.</li>
+        <li><strong>Microphone (RECORD_AUDIO):</strong> Optional, requested only when you tap the voice dictation button.</li>
+        <li><strong>Camera / Storage (READ_MEDIA_IMAGES):</strong> Optional, requested only when uploading photos or documents for analysis.</li>
+        <li><strong>Notifications:</strong> Optional, for long-running AI task completion alerts.</li>
+      </ul>
+
+      <h2>7. Data Retention & Account Deletion</h2>
+      <p>You have full control over your data. You may delete individual chats, files, images, or memories at any time directly in the application. To permanently delete your entire account and all associated data, you can use the in-app <strong>Settings &gt; Delete Account</strong> flow or visit our <a href="/delete-account" style="color:var(--color-bright);text-decoration:underline;">Account Deletion Request Page</a>.</p>
+
+      <h2>8. Data Controller & Executive Leadership</h2>
+      <p>NEXORA AI is governed under the executive leadership of:</p>
+      <ul>
+        <li><strong>Owner:</strong> Nithish Kumar R (Founder &amp; Platform Architect)</li>
+        <li><strong>CEO:</strong> Dhanushiya S (Chief Executive Officer)</li>
+      </ul>
+      <p>For privacy inquiries, GDPR data requests, or compliance questions, contact our Data Protection Officer at <strong>privacy@nexora.ai</strong> or <strong>owner@nexora.ai</strong>.</p>
+    </div>
+  </div>
+</body>
+</html>

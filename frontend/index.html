@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXORA AI — One AI. Everything you need.</title>
+  <meta name="description" content="Production-ready AI platform with enterprise-grade security, multi-model chat, document vision, image generation, voice intelligence, and project workspaces.">
+  <meta property="og:title" content="NEXORA AI — One AI. Everything you need.">
+  <meta property="og:description" content="Production-ready AI platform with enterprise-grade security and unified intelligence.">
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+
+  <style>
+    /* Landing Specific Styles */
+    .landing-header {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--color-border);
+      transition: background-color var(--transition-normal), border-color var(--transition-normal);
+    }
+    .landing-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .hero-section {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 140px 24px 80px 24px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: var(--radius-full);
+      background: var(--color-primary-subtle);
+      border: 1px solid var(--color-border);
+      color: var(--color-bright);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .hero-badge .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-bright);
+      box-shadow: 0 0 10px var(--color-bright);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 var(--color-border-glow); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px transparent; }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 transparent; }
+    }
+    .hero-title {
+      font-size: clamp(44px, 7.5vw, 80px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      max-width: 900px;
+      margin-bottom: 20px;
+    }
+    .hero-title span {
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-tagline {
+      font-size: clamp(18px, 2.5vw, 24px);
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      max-width: 640px;
+      margin-bottom: 40px;
+      line-height: 1.5;
+    }
+    .hero-cta-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 100px 24px;
+      position: relative;
+      z-index: 1;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      transition: all var(--transition-normal);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--color-border-hover);
+      box-shadow: var(--shadow-glow);
+    }
+    .feature-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-subtle);
+      border: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-bright);
+    }
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-text-main);
+    }
+    .feature-card p {
+      color: var(--color-text-secondary);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .landing-footer {
+      border-top: 1px solid var(--color-border);
+      padding: 40px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--color-text-muted);
+      font-size: 14px;
+      max-width: 1200px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .footer-links a {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      transition: color var(--transition-fast);
+    }
+    .footer-links a:hover {
+      color: var(--color-bright);
+    }
+    @media (max-width: 768px) {
+      .landing-header {
+        padding: 0 20px;
+      }
+      .landing-footer {
+        padding: 32px 20px;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Glow Effects -->
+  <div class="ambient-glow top-left"></div>
+  <div class="ambient-glow bottom-right"></div>
+
+  <!-- Header Navigation -->
+  <header class="landing-header">
+    <a href="/" class="brand-logo" style="margin-bottom: 0;">
+      <img src="/assets/logo.png" alt="NEXORA AI Logo" class="brand-logo-img">
+      <span class="brand-title" style="font-size: 22px;">NEXORA <span class="brand-accent">AI</span></span>
+    </a>
+
+    <div class="landing-nav-links">
+      <button class="btn-theme-toggle" id="btn-theme-toggle" title="Switch to Black Theme" aria-label="Toggle Theme">
+        <span class="theme-icon-dark">🌙</span>
+      <span class="theme-icon-light" style="display:none;">☀️</span>
+      </button>
+      <a href="/login" id="btn-header-signin" class="btn btn-secondary">Sign In</a>
+      <a href="/signup" id="btn-header-getstarted" class="btn btn-primary">Get Started</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main>
+    <section class="hero-section">
+      <div class="hero-badge">
+        <span class="pulse-dot"></span>
+        <span>Unified Intelligence Platform</span>
+      </div>
+
+      <h1 class="hero-title">
+        <span>NEXORA AI</span>
+      </h1>
+
+      <p class="hero-tagline">
+        One AI. Everything you need.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="/signup" id="btn-hero-getstarted" class="btn btn-primary btn-lg">
+          Get Started
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+        <a href="/login" id="btn-hero-signin" class="btn btn-secondary btn-lg">
+          Sign In
+        </a>
+      </div>
+    </section>
+
+    <!-- Core Features Grid -->
+    <section class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h3>Enterprise Authentication</h3>
+        <p>Bcrypt password hashing with high salt rounds, secure HTTP-only SameSite session cookies, and cryptographic JWT tokens.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <h3>Unified Multi-Model Chat</h3>
+        <p>Real-time SSE streaming conversations with model switching, conversation branching, message editing, and search.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+        </div>
+        <h3>Document & Vision AI</h3>
+        <p>Upload PDF, DOCX, CSV, and images for executive summarization, Q&amp;A, diagram inspection, and OCR extraction.</p>
+      </div>
+    </section>
+
+    <!-- Leadership Section -->
+    <section style="max-width: 1200px; margin: 0 auto; padding: 0 24px 80px 24px; position: relative; z-index: 1;">
+      <div style="text-align: center; margin-bottom: 40px;">
+        <div class="hero-badge" style="margin-bottom: 12px;">
+          <span>Official Leadership</span>
+        </div>
+        <h2 style="font-size: 32px; font-weight: 800; color: var(--color-text-main); margin-bottom: 8px;">Executive Leadership</h2>
+        <p style="color: var(--color-text-secondary); font-size: 16px; max-width: 500px; margin: 0 auto;">Pioneering next-generation unified intelligence systems.</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; max-width: 800px; margin: 0 auto;">
+        <!-- Owner Card -->
+        <div class="feature-card" style="align-items: center; text-align: center; border-color: var(--color-border);">
+          <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--color-primary-subtle); border: 2px solid var(--color-bright); display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 8px;">
+            👑
+          </div>
+          <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--color-bright);">Owner</span>
+          <h3 style="font-size: 22px; font-weight: 700; margin: 4px 0 8px 0; color: var(--color-text-main);">Nithish Kumar R</h3>
+          <p style="color: var(--color-text-secondary); font-size: 14px; margin: 0;">Platform Architect &amp; Founder</p>
+        </div>
+
+        <!-- CEO Card -->
+        <div class="feature-card" style="align-items: center; text-align: center; border-color: rgba(6, 182, 212, 0.4);">
+          <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(6, 182, 212, 0.15); border: 2px solid #06B6D4; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 8px;">
+            🚀
+          </div>
+          <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #06B6D4;">CEO</span>
+          <h3 style="font-size: 22px; font-weight: 700; margin: 4px 0 8px 0; color: var(--color-text-main);">Dhanushiya S</h3>
+          <p style="color: var(--color-text-secondary); font-size: 14px; margin: 0;">Chief Executive Officer</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="landing-footer">
+    <div>&copy; 2026 NEXORA AI. Leadership: Nithish Kumar R (Owner) &amp; Dhanushiya S (CEO).</div>
+    <div class="footer-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/delete-account">Delete Account</a>
+    </div>
+  </footer>
+
+  <script src="/js/api.js"></script>
+</body>
+</html>

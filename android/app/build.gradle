@@ -1,0 +1,98 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'ai.nexora.myai'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "ai.nexora.myai"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        manifestPlaceholders = [
+            appName: "NEXORA AI"
+        ]
+    }
+
+    signingConfigs {
+        release {
+            // For production builds with a real release keystore:
+            // set NEXORA_RELEASE_STORE_FILE, NEXORA_RELEASE_STORE_PASSWORD, NEXORA_RELEASE_KEY_ALIAS, NEXORA_RELEASE_KEY_PASSWORD
+            if (project.hasProperty('NEXORA_RELEASE_STORE_FILE')) {
+                storeFile file(project.property('NEXORA_RELEASE_STORE_FILE'))
+                storePassword project.property('NEXORA_RELEASE_STORE_PASSWORD')
+                keyAlias project.property('NEXORA_RELEASE_KEY_ALIAS')
+                keyPassword project.property('NEXORA_RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (project.hasProperty('NEXORA_RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
+            buildConfigField "String", "DEFAULT_SERVER_URL", "\"https://api.nexora.ai\""
+            buildConfigField "boolean", "STRICT_HTTPS", "true"
+        }
+        debug {
+            minifyEnabled false
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            buildConfigField "String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:8000\""
+            buildConfigField "boolean", "STRICT_HTTPS", "false"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    
+    // Networking & Serialization (Server-side mediated, NO API keys in app)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+
+    // Testing
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+}

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# Android build outputs & local secrets
+android/app/build/
+android/.gradle/
+android/local.properties
+android/*.jks
+*.apk
+*.aab
+
+# Local data & uploads (in local development only)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/uploads/*
+!data/.gitkeep
+!data/uploads/.gitkeep
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base Application Theme using standard Android SDK Material -->
+    <style name="Theme.MyAI" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:statusBarColor">@color/status_bar_color</item>
+        <item name="android:navigationBarColor">@color/navigation_bar_color</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+    </style>
+
+    <!-- Starting Splash Theme -->
+    <style name="Theme.MyAI.Starting" parent="Theme.MyAI">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+</resources>

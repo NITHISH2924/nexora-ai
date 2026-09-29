@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: nexora-ai-platform
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 4 --proxy-headers --forwarded-allow-ips "*"
+    plan: standard
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECURE_COOKIES
+        value: "true"
+      - key: DATABASE_PATH
+        value: data/nexora_prod.db
+      - key: UPLOAD_DIR
+        value: data/uploads
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OWNER_EMAIL
+        value: owner@nexora.ai
+      - key: CEO_EMAIL
+        value: ceo@nexora.ai
+    disk:
+      name: nexora_data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 10

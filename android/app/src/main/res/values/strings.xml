@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">NEXORA AI</string>
+    <string name="app_tagline">One AI. Everything you need.</string>
+    <string name="title_activity_main">NEXORA AI</string>
+    
+    <!-- Permissions & Rationale -->
+    <string name="permission_microphone_title">Microphone Access Required</string>
+    <string name="permission_microphone_message">NEXORA AI requires microphone access to transcribe speech for hands-free voice AI conversations.</string>
+    <string name="permission_camera_title">Camera Access Required</string>
+    <string name="permission_camera_message">NEXORA AI requires camera access to capture photos and diagrams for multimodal vision analysis.</string>
+    <string name="permission_storage_title">Storage Access Required</string>
+    <string name="permission_storage_message">NEXORA AI requires storage access to upload documents, CSV files, and images for AI processing.</string>
+    <string name="permission_notification_title">Notifications</string>
+    <string name="permission_notification_message">Allow notifications to stay updated when long-running research or image generations complete.</string>
+    <string name="permission_grant">Grant Permission</string>
+    <string name="permission_cancel">Cancel</string>
+    <string name="permission_settings">Open Settings</string>
+
+    <!-- Navigation & Errors -->
+    <string name="error_offline_title">No Internet Connection</string>
+    <string name="error_offline_desc">Please check your Wi-Fi or mobile data connection and try again.</string>
+    <string name="error_ssl_title">Secure Connection Error</string>
+    <string name="error_ssl_desc">Unable to establish a verified secure HTTPS connection to the server.</string>
+    <string name="error_server_title">Server Unavailable</string>
+    <string name="error_server_desc">Unable to reach the NEXORA AI backend server. Please verify your connection or server configuration.</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_settings">Settings</string>
+    <string name="exit_confirm_toast">Press back again to exit NEXORA AI</string>
+</resources>

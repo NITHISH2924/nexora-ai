@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delete Account — NEXORA AI</title>
+  <meta name="description" content="Request permanent account and data deletion from NEXORA AI.">
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <style>
+    .delete-container {
+      max-width: 600px;
+      margin: 40px auto 80px auto;
+      padding: 0 24px;
+    }
+    .delete-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .delete-card {
+      background: var(--bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: 40px;
+      box-shadow: var(--shadow-modal);
+    }
+    .danger-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--color-danger-bg);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: var(--color-danger);
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .delete-card h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--color-text-main);
+      margin-bottom: 12px;
+    }
+    .delete-card p {
+      color: var(--color-text-secondary);
+      font-size: 14.5px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .delete-warning-box {
+      background: var(--color-danger-bg);
+      border-left: 4px solid var(--color-danger);
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 24px;
+    }
+    .delete-warning-box ul {
+      margin: 8px 0 0 20px;
+      color: var(--color-text-secondary);
+      font-size: 13.5px;
+    }
+    .nav-back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--color-bright);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: color var(--transition-fast);
+    }
+    .nav-back-link:hover {
+      color: var(--color-text-main);
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow top-left"></div>
+  <div class="ambient-glow bottom-right"></div>
+
+  <div class="delete-container">
+    <div class="delete-nav">
+      <a href="/" class="nav-back-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back to Home
+      </a>
+      <button class="btn-theme-toggle" title="Switch to Black Theme" aria-label="Toggle Theme">
+        <span class="theme-icon-dark">🌙</span>
+      <span class="theme-icon-light" style="display:none;">☀️</span>
+      </button>
+    </div>
+
+    <div class="delete-card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <img src="/assets/logo.png" alt="NEXORA AI Logo" class="brand-logo-img" style="width:36px;height:36px;">
+        <span class="brand-title">NEXORA <span class="brand-accent">AI</span></span>
+      </div>
+
+      <div class="danger-badge">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/></svg>
+        Permanent Action
+      </div>
+      <h1>Delete Account & Data</h1>
+      <p>Deleting your NEXORA AI account will permanently remove all your conversations, uploaded documents, generated images, projects, and personal AI memories. <strong>This action cannot be undone.</strong></p>
+
+      <div class="delete-warning-box">
+        <strong style="color:var(--color-danger);">What will be permanently deleted:</strong>
+        <ul>
+          <li>All chat sessions and prompt history</li>
+          <li>All uploaded documents, spreadsheets, and vision files</li>
+          <li>All generated images, voice audio files, and sandbox code</li>
+          <li>All project workspaces, notes, and saved outputs</li>
+          <li>All custom AI persona preferences and long-term memories</li>
+        </ul>
+      </div>
+
+      <form id="delete-form">
+        <div class="form-group">
+          <label class="form-label" for="email">Account Email</label>
+          <input type="email" id="email" class="form-input" required placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Confirm Password</label>
+          <input type="password" id="password" class="form-input" required placeholder="Enter your current password">
+        </div>
+        <button type="submit" class="btn btn-danger btn-block btn-lg" id="delete-btn">Permanently Delete My Account</button>
+      </form>
+      <div id="status-msg" style="margin-top:20px; text-align:center; display:none;"></div>
+      <div style="margin-top:28px; padding-top:20px; border-top:1px solid var(--color-border); text-align:center; font-size:13px; color:var(--color-text-muted);">
+        NEXORA AI Platform Governance &bull; <strong>Owner:</strong> Nithish Kumar R &bull; <strong>CEO:</strong> Dhanushiya S
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('delete-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const statusDiv = document.getElementById('status-msg');
+      const btn = document.getElementById('delete-btn');
+
+      if (!confirm('Are you absolutely sure you want to permanently delete your NEXORA AI account and all data? This cannot be reversed.')) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'Deleting account...';
+
+      try {
+        // 1. Authenticate first
+        const loginRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const loginData = await loginRes.json();
+        if (!loginRes.ok) {
+          throw new Error(loginData.detail || 'Authentication failed. Please verify your credentials.');
+        }
+
+        const token = loginData.token;
+
+        // 2. Perform account deletion
+        const delRes = await fetch('/api/user/account', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+          }
+        });
+        const delData = await delRes.json();
+        if (!delRes.ok) {
+          throw new Error(delData.detail || 'Failed to delete account.');
+        }
+
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = '#10B981';
+        statusDiv.innerHTML = '<strong>Success!</strong> Your NEXORA AI account and all data have been completely deleted. You will be redirected shortly.';
+        localStorage.removeItem('nexora_token');
+        setTimeout(() => { window.location.href = '/'; }, 3000);
+      } catch (err) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = '#EF4444';
+        statusDiv.innerText = err.message;
+        btn.disabled = false;
+        btn.innerText = 'Permanently Delete My Account';
+      }
+    });
+  </script>
+</body>
+</html>

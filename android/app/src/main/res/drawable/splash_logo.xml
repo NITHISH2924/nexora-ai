@@ -1,0 +1,54 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+    
+    <!-- Background Circle for Splash Logo -->
+    <path
+        android:pathData="M80,80m-70,0a70,70 0,1 1,140 0a70,70 0,1 1,-140 0"
+        android:fillColor="#131322"
+        android:strokeWidth="2">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="10"
+                android:startY="10"
+                android:endX="150"
+                android:endY="150"
+                android:type="linear">
+                <item android:color="#8B5CF6" android:offset="0.0" />
+                <item android:color="#06B6D4" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <group
+        android:scaleX="1.2"
+        android:scaleY="1.2"
+        android:translateX="-16"
+        android:translateY="-16">
+        <!-- Spark Core -->
+        <path
+            android:pathData="M80,36 C80,58 58,80 36,80 C58,80 80,102 80,124 C80,102 102,80 124,80 C102,80 80,58 80,36 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="36"
+                    android:startY="36"
+                    android:endX="124"
+                    android:endY="124"
+                    android:type="linear">
+                    <item android:color="#FFFFFF" android:offset="0.0" />
+                    <item android:color="#C4B5FD" android:offset="0.3" />
+                    <item android:color="#8B5CF6" android:offset="0.7" />
+                    <item android:color="#06B6D4" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        
+        <!-- Center Quantum Pulse -->
+        <path
+            android:pathData="M80,80m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"
+            android:fillColor="#FFFFFF" />
+    </group>
+</vector>

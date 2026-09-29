@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXORA AI — One AI. Everything you need.</title>
+  <meta name="description" content="NEXORA AI unified intelligence workspace, multi-model AI chat, and conversational intelligence. One AI. Everything you need.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  
+  <!-- Highlight.js for Code Syntax Highlighting -->
+  <link rel="stylesheet" id="hljs-theme-link" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <!-- Marked.js for fast Markdown parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow top-left"></div>
+  <div class="ambient-glow bottom-right"></div>
+
+  <div class="app-layout">
+    <!-- LEFT SIDEBAR -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <!-- 1. NEXORA Brand Logo -->
+      <div class="sidebar-header">
+        <a href="/app" class="brand-logo" style="margin-bottom:0; text-decoration:none;">
+          <img src="/assets/logo.png" alt="NEXORA AI Logo" class="brand-logo-img">
+          <span class="brand-title">NEXORA <span class="brand-accent">AI</span></span>
+        </a>
+      </div>
+
+      <!-- 2. New Chat Action Button -->
+      <div class="sidebar-action-container">
+        <button class="btn-new-chat" id="btn-sidebar-new-chat" title="Create New Chat (Ctrl+K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New Chat</span>
+          <span class="shortcut-badge">⌘K</span>
+        </button>
+      </div>
+
+      <!-- Search in conversations -->
+      <div class="sidebar-search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="conversation-search-input" placeholder="Search conversations..." autocomplete="off">
+      </div>
+
+      <!-- Main Navigation and Sections -->
+      <div class="sidebar-scrollable-area">
+        
+        <!-- Navigation Section -->
+        <div class="nav-section-title">WORKSPACE</div>
+        <nav class="sidebar-nav">
+          <div class="nav-item active" data-view="chat" id="nav-chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="nav-text">AI Workspace</span>
+          </div>
+
+          <div class="nav-item" data-view="projects" id="nav-projects">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="nav-text">Projects</span>
+          </div>
+
+          <div class="nav-item" data-view="search" id="nav-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <span class="nav-text">AI Search</span>
+          </div>
+
+          <div class="nav-item" data-view="files" id="nav-files">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span class="nav-text">Files & Docs</span>
+          </div>
+
+          <div class="nav-item" data-view="images" id="nav-images">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <span class="nav-text">Vision Studio</span>
+          </div>
+
+          <div class="nav-item" data-view="image-gen" id="nav-image-gen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span class="nav-text">Image Generator</span>
+          </div>
+
+          <div class="nav-item" data-view="code" id="nav-code">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+            <span class="nav-text">Code Studio</span>
+          </div>
+
+          <div class="nav-item" data-view="writing" id="nav-writing">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span class="nav-text">Writing Studio</span>
+          </div>
+
+          <div class="nav-item" data-view="settings" id="nav-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span class="nav-text">Settings</span>
+          </div>
+
+          <!-- Owner Admin Section (Visible only to OWNER role) -->
+          <div class="nav-item" data-view="owner" id="owner-nav-item" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span class="nav-text">Owner Console</span>
+          </div>
+        </nav>
+
+        <!-- 3. Recent Chats Section -->
+        <div class="recent-chats-header">
+          <div class="nav-section-title" style="padding-left: 0; padding-bottom: 0;">RECENT CHATS</div>
+          <span class="chat-count-badge" id="chat-total-count">0</span>
+        </div>
+
+        <div class="recent-chats-list" id="recent-chats-list">
+          <!-- Dynamically populated conversations -->
+          <div class="chat-list-empty" id="chat-list-loading">Loading conversations...</div>
+        </div>
+      </div>
+
+      <!-- 10. User Profile Section in Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="user-snippet" id="user-profile-snippet" title="View Account & Profile">
+          <div class="user-avatar" id="user-avatar">U</div>
+          <div class="user-details">
+            <div class="user-email-text" id="user-email">loading...</div>
+            <div class="user-role-badge-wrapper">
+              <span id="user-role-badge" class="badge badge-user">USER</span>
+            </div>
+          </div>
+          <button class="btn-sidebar-logout" id="btn-quick-logout" title="Sign Out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="app-main">
+      
+      <!-- Topbar -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="mobile-drawer-toggle" aria-label="Toggle Sidebar Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+
+          <!-- Conversation Title & Rename -->
+          <div class="conversation-title-wrapper">
+            <span class="active-conversation-title" id="active-conv-title">New Chat</span>
+            <button class="btn-icon-sm" id="btn-edit-conv-title" title="Rename conversation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- Theme Toggle Switch -->
+          <button class="btn-theme-toggle" id="btn-theme-toggle" title="Switch to Black Theme" aria-label="Toggle Theme">
+            <span class="theme-icon-dark">🌙</span>
+      <span class="theme-icon-light" style="display:none;">☀️</span>
+          </button>
+
+          <!-- Model Selector Dropdown -->
+          <div class="model-selector-dropdown-wrapper">
+            <button class="model-select-btn" id="model-select-btn">
+              <span class="model-status-dot"></span>
+              <span class="model-label" id="current-selected-model-label">Gemini 1.5 Flash</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="model-dropdown-menu" id="model-dropdown-menu">
+              <!-- Dynamically populated from /api/chat/models -->
+            </div>
+          </div>
+
+          <!-- Quick Topbar Actions -->
+          <button class="btn btn-secondary btn-sm" id="btn-clear-chat" title="Clear current chat messages">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Clear</span>
+          </button>
+
+          <button class="btn btn-secondary btn-sm" id="btn-export-chat" title="Export conversation as Markdown">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Export</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEW 1: AI CHAT WORKSPACE (Default) -->
+      <section class="main-view active" id="view-chat">
+        
+        <!-- Chat Message Scroll Container -->
+        <div class="chat-messages-container" id="chat-messages-container">
+          
+          <!-- Empty State Screen -->
+          <div class="chat-empty-state" id="chat-empty-state">
+            <div class="empty-state-icon-wrapper" style="background:transparent;border:none;">
+              <img src="/assets/logo.png" alt="NEXORA AI Logo" class="brand-logo-img" style="width:72px;height:72px;object-fit:contain;">
+            </div>
+            <h2 class="empty-state-title">What will we build today?</h2>
+            <p class="empty-state-subtitle">Ask questions, generate architecture, write code, or analyze data with NEXORA AI intelligence.</p>
+
+            <div class="prompt-starters-grid">
+              <button class="prompt-starter-card" data-prompt="Write a modern, production-ready async FastAPI backend with clean routing and error handling.">
+                <div class="starter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"></polyline>
+                    <polyline points="8 6 2 12 8 18"></polyline>
+                  </svg>
+                </div>
+                <div class="starter-text">
+                  <span class="starter-title">Build FastAPI Backend</span>
+                  <span class="starter-desc">Async endpoints, Pydantic validation & error handling</span>
+                </div>
+              </button>
+
+              <button class="prompt-starter-card" data-prompt="Explain how Transformer attention mechanisms and KV cache work in large language models.">
+                <div class="starter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                </div>
+                <div class="starter-text">
+                  <span class="starter-title">Explain AI Architecture</span>
+                  <span class="starter-desc">Transformer self-attention and KV caching deep-dive</span>
+                </div>
+              </button>
+
+              <button class="prompt-starter-card" data-prompt="Create a stunning glassmorphic CSS design system with custom CSS variables and responsive grid.">
+                <div class="starter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                  </svg>
+                </div>
+                <div class="starter-text">
+                  <span class="starter-title">Design Glassmorphic UI</span>
+                  <span class="starter-desc">Dark mode tokens, glowing borders & sleek cards</span>
+                </div>
+              </button>
+
+              <button class="prompt-starter-card" data-prompt="Optimize SQLite relational schema with indexing, WAL mode, and cascading foreign keys.">
+                <div class="starter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                  </svg>
+                </div>
+                <div class="starter-text">
+                  <span class="starter-title">Database Performance</span>
+                  <span class="starter-desc">SQLite indexing, WAL mode & async optimization</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Message stream populated dynamically -->
+          <div class="message-feed" id="message-feed"></div>
+        </div>
+
+        <!-- COMPOSER AREA -->
+        <div class="chat-composer-container">
+          <!-- Attachment Pill Preview if any -->
+          <div class="attachment-preview-bar" id="attachment-preview-bar" style="display:none;">
+            <div class="attachment-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <span id="attachment-filename">document.txt</span>
+              <button class="btn-remove-attachment" id="btn-remove-attachment" title="Remove attachment">&times;</button>
+            </div>
+          </div>
+
+          <div class="composer-card">
+            <!-- Hidden file inputs -->
+            <input type="file" id="file-attachment-input" style="display:none;" accept=".txt,.md,.py,.js,.html,.css,.json,.csv,.sql,.pdf">
+            <input type="file" id="image-attachment-input" style="display:none;" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+
+            <!-- Composer Toolbar Left -->
+            <div class="composer-actions-left">
+              <!-- Attach File Button -->
+              <button class="composer-tool-btn" id="btn-attach-file" title="Attach document or code snippet">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                </svg>
+              </button>
+
+              <!-- Image Mode Button -->
+              <button class="composer-tool-btn" id="btn-attach-image" title="Add image context or image prompt">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </button>
+
+              <!-- Voice Input Button -->
+              <button class="composer-tool-btn tooltip-trigger" id="btn-voice-input" title="Voice Input & Speech-to-Text (NEXORA AI Voice Intelligence)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Auto-growing Textarea -->
+            <div class="composer-input-area">
+              <textarea
+                id="chat-textarea"
+                rows="1"
+                placeholder="Ask NEXORA AI anything... (Shift+Enter for newline)"
+                autocomplete="off"
+                autofocus
+              ></textarea>
+            </div>
+
+            <!-- Composer Actions Right: Send or Stop Button -->
+            <div class="composer-actions-right">
+              <button class="btn-send-message" id="btn-send-message" title="Send message (Enter)">
+                <svg id="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <svg id="icon-stop" style="display:none;" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="composer-footer-hints">
+            <span>Press <kbd>Enter</kbd> to send, <kbd>Shift + Enter</kbd> for newline</span>
+            <span class="active-engine-badge" id="active-engine-badge">Engine: Ready</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: PROJECTS & LONG-TERM WORKSPACE -->
+      <section class="main-view" id="view-projects">
+        <div class="view-content-wrapper">
+          <!-- Projects List Stage -->
+          <div id="projects-list-stage">
+            <div class="view-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+              <div>
+                <h2>Projects & Long-Term Workspaces</h2>
+                <p>Organize custom domain instructions, conversations, research notes, documents, and saved outputs into dedicated project hubs.</p>
+              </div>
+              <button class="btn btn-primary" id="btn-open-create-project-modal" style="display:flex;align-items:center;gap:6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New Project</span>
+              </button>
+            </div>
+
+            <div class="projects-grid" id="projects-container-grid">
+              <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--color-text-muted);">
+                <div class="pulse-loader" style="margin-bottom:12px;"></div>
+                <div>Loading your projects...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project Detail Studio Stage (Hidden by default, shown when project is active) -->
+          <div id="project-detail-stage" style="display:none;">
+            <!-- Project Breadcrumb & Header -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--color-border);padding-bottom:12px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <button class="btn btn-outline btn-sm" id="btn-back-to-projects-list" style="padding:4px 10px;font-size:12px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  <span>All Projects</span>
+                </button>
+                <div style="width:14px;height:14px;border-radius:4px;" id="active-project-color-badge"></div>
+                <h2 style="font-size:20px;color:#FFFFFF;margin:0;" id="active-project-title">Project Name</h2>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary btn-sm" id="btn-edit-active-project" style="padding:4px 10px;font-size:12px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  <span>Edit Project</span>
+                </button>
+                <button class="btn btn-danger btn-sm" id="btn-delete-active-project" style="padding:4px 10px;font-size:12px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <p style="font-size:13px;color:var(--color-text-secondary);margin-bottom:16px;" id="active-project-desc">Project description...</p>
+
+            <!-- Project Navigation Tabs -->
+            <div class="project-tab-bar" id="project-detail-tabs">
+              <button class="project-tab-btn active" data-tab="chats">💬 Chats (<span id="proj-tab-count-chats">0</span>)</button>
+              <button class="project-tab-btn" data-tab="files">📁 Files & Docs (<span id="proj-tab-count-files">0</span>)</button>
+              <button class="project-tab-btn" data-tab="notes">📝 Notes & Scratchpad (<span id="proj-tab-count-notes">0</span>)</button>
+              <button class="project-tab-btn" data-tab="outputs">⚡ Saved Outputs (<span id="proj-tab-count-outputs">0</span>)</button>
+              <button class="project-tab-btn" data-tab="instructions">🎯 Custom Instructions</button>
+            </div>
+
+            <!-- Tab Content 1: Linked Chats -->
+            <div class="project-tab-panel active" id="proj-panel-chats">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="font-size:13px;color:var(--color-text-secondary);">Conversations linked to this project workspace</span>
+                <button class="btn btn-primary btn-sm" id="btn-create-project-chat" style="font-size:12px;padding:4px 12px;">+ Start New Project Chat</button>
+              </div>
+              <div class="project-items-list" id="project-chats-list">
+                <div style="font-size:12px;color:var(--color-text-muted);padding:24px;text-align:center;">No conversations linked to this project yet.</div>
+              </div>
+            </div>
+
+            <!-- Tab Content 2: Linked Files -->
+            <div class="project-tab-panel" id="proj-panel-files" style="display:none;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="font-size:13px;color:var(--color-text-secondary);">Knowledge files & context documents linked to this project</span>
+                <button class="btn btn-primary btn-sm" id="btn-link-project-file" style="font-size:12px;padding:4px 12px;">+ Link Uploaded File</button>
+              </div>
+              <div class="project-items-list" id="project-files-list">
+                <div style="font-size:12px;color:var(--color-text-muted);padding:24px;text-align:center;">No files linked to this project yet.</div>
+              </div>
+            </div>
+
+            <!-- Tab Content 3: Notes & Scratchpad -->
+            <div class="project-tab-panel" id="proj-panel-notes" style="display:none;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="font-size:13px;color:var(--color-text-secondary);">Project notes, brainstorms, architecture outlines, and specifications</span>
+                <button class="btn btn-primary btn-sm" id="btn-add-project-note" style="font-size:12px;padding:4px 12px;">+ Add Note</button>
+              </div>
+              <div class="project-notes-grid" id="project-notes-list">
+                <div style="font-size:12px;color:var(--color-text-muted);padding:24px;text-align:center;grid-column:1/-1;">No notes created yet.</div>
+              </div>
+            </div>
+
+            <!-- Tab Content 4: Saved Outputs -->
+            <div class="project-tab-panel" id="proj-panel-outputs" style="display:none;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="font-size:13px;color:var(--color-text-secondary);">Pinned code snippets, summaries, and research artifacts</span>
+                <button class="btn btn-primary btn-sm" id="btn-add-project-output" style="font-size:12px;padding:4px 12px;">+ Save Output</button>
+              </div>
+              <div class="project-outputs-grid" id="project-outputs-list">
+                <div style="font-size:12px;color:var(--color-text-muted);padding:24px;text-align:center;grid-column:1/-1;">No saved outputs yet.</div>
+              </div>
+            </div>
+
+            <!-- Tab Content 5: Custom Instructions -->
+            <div class="project-tab-panel" id="proj-panel-instructions" style="display:none;">
+              <div class="card" style="padding:20px;">
+                <h3 style="font-size:15px;color:#FFFFFF;margin-bottom:8px;">Project System Instructions & Domain Rules</h3>
+                <p style="font-size:13px;color:var(--color-text-secondary);margin-bottom:14px;">These guidelines will automatically be injected into all AI chats and reasoning tasks within this project.</p>
+                <textarea id="project-instructions-editor" class="form-input" rows="6" placeholder="e.g. Always write production-ready TypeScript with strict types. Use Clean Architecture and avoid external ORMs."></textarea>
+                <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+                  <button class="btn btn-primary btn-sm" id="btn-save-project-instructions">Save Project Instructions</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: AI SEARCH -->
+      <section class="main-view" id="view-search">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>AI Deep Search & Research Engine</h2>
+            <p>Real-time web retrieval, grounded fact synthesis, and verified citations with zero hallucinations.</p>
+          </div>
+
+          <!-- Search Query Input Bar -->
+          <div class="card" style="margin-bottom:20px;">
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+              <div style="flex:1;position:relative;min-width:280px;">
+                <input type="text" id="ai-deep-search-input" class="form-input" style="height:46px;font-size:15px;padding-left:42px;" placeholder="Ask any research question or live web query... (e.g. Latest Python 3.13 features)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="position:absolute;left:14px;top:14px;color:var(--color-primary-light);">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </div>
+
+              <!-- Depth Selector -->
+              <select id="search-depth-select" class="form-input" style="width:140px;height:46px;font-size:13px;">
+                <option value="standard">Standard Search</option>
+                <option value="deep">Deep Research (8+ sources)</option>
+              </select>
+
+              <button class="btn btn-primary" id="btn-run-deep-search" style="height:46px;padding:0 22px;display:flex;align-items:center;gap:8px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span>Search</span>
+              </button>
+            </div>
+
+            <!-- Quick Suggestions -->
+            <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap;font-size:12px;color:var(--color-text-muted);">
+              <span>Trending:</span>
+              <button class="search-preset-chip" data-query="FastAPI concurrency vs Go goroutines performance">FastAPI vs Go Performance</button>
+              <button class="search-preset-chip" data-query="Python 3.13 Free-Threaded No-GIL changes">Python 3.13 No-GIL</button>
+              <button class="search-preset-chip" data-query="WebAssembly component model adoption in 2026">Wasm Component Model</button>
+              <button class="search-preset-chip" data-query="PostgreSQL vector indexing pgvector vs HNSW">pgvector vs HNSW</button>
+            </div>
+          </div>
+
+          <!-- Live Search Status Indicator -->
+          <div id="search-status-bar" style="display:none;margin-bottom:18px;padding:12px 18px;background:var(--color-primary-subtle);border:1px solid var(--color-border);border-radius:var(--radius-md);align-items:center;gap:12px;">
+            <div class="pulse-loader" style="width:18px;height:18px;"></div>
+            <div style="font-size:13px;color:var(--color-text-main);" id="search-status-text">1. Searching live web sources...</div>
+          </div>
+
+          <!-- Main Search Results Display Area -->
+          <div id="search-results-container">
+            <div style="text-align:center;padding:60px 20px;color:var(--color-text-muted);background:rgba(255,255,255,0.01);border:1px dashed var(--color-border);border-radius:var(--radius-lg);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="44" height="44" style="color:var(--color-bright);margin-bottom:12px;opacity:0.6;">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <h3 style="color:#FFFFFF;margin-bottom:6px;font-size:16px;">AI Deep Search & Fact Synthesis</h3>
+              <p style="font-size:13px;max-width:480px;margin:0 auto;">Search queries execute live web retrieval, grounded source extraction, and AI synthesis with verified citations.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: FILES & DOCUMENT INTELLIGENCE -->
+      <section class="main-view" id="view-files">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>Files & Document Intelligence</h2>
+            <p>Upload PDFs, Word docs, spreadsheets, text files, and images for AI summarization, Q&A, and structured data extraction.</p>
+          </div>
+
+          <div class="files-layout-container">
+            <!-- Upload Dropzone Card -->
+            <div class="card">
+              <input type="file" id="files-page-file-input" style="display:none;" multiple accept=".pdf,.docx,.doc,.txt,.csv,.png,.jpg,.jpeg,.webp,.gif">
+              <div class="files-dropzone" id="files-page-dropzone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40" style="color:var(--color-bright);margin-bottom:12px;">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <h3 style="color:#FFFFFF;margin-bottom:6px;">Drag & Drop Documents Here or Browse</h3>
+                <p style="color:var(--color-text-secondary);font-size:13px;">Securely parsed with isolated multi-tenant storage (Max 20MB per file)</p>
+                
+                <div class="files-format-chips">
+                  <span class="format-chip"><span class="file-type-badge type-pdf">PDF</span> Documents</span>
+                  <span class="format-chip"><span class="file-type-badge type-docx">DOCX</span> Word</span>
+                  <span class="format-chip"><span class="file-type-badge type-csv">CSV</span> Data Sheets</span>
+                  <span class="format-chip"><span class="file-type-badge type-txt">TXT</span> Text</span>
+                  <span class="format-chip"><span class="file-type-badge type-image">IMG</span> Vision</span>
+                </div>
+
+                <button class="btn btn-primary btn-sm" style="margin-top:18px;" id="btn-browse-files-page">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  Select Files from Computer
+                </button>
+
+                <!-- Live Upload Progress -->
+                <div class="upload-progress-container" id="upload-progress-container" style="display:none;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;color:var(--color-text-main);">
+                    <span id="upload-progress-filename">Uploading file...</span>
+                    <span id="upload-progress-percent">0%</span>
+                  </div>
+                  <div class="upload-progress-bar-bg">
+                    <div class="upload-progress-bar-fill" id="upload-progress-bar-fill"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Files Table & Management Card -->
+            <div class="card">
+              <div class="files-toolbar" style="margin-bottom:18px;">
+                <div class="files-filter-pills" id="files-filter-pills">
+                  <button class="filter-pill active" data-filter="all">All Files</button>
+                  <button class="filter-pill" data-filter="pdf">PDFs</button>
+                  <button class="filter-pill" data-filter="docx">Word (.docx)</button>
+                  <button class="filter-pill" data-filter="csv">CSVs</button>
+                  <button class="filter-pill" data-filter="txt">Text</button>
+                  <button class="filter-pill" data-filter="image">Images</button>
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;">
+                  <div class="search-box-inline" style="position:relative;">
+                    <input type="text" id="files-search-input" class="form-input" placeholder="Search files by name..." style="padding-left:32px;font-size:13px;width:220px;height:34px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="position:absolute;left:10px;top:10px;color:var(--color-text-muted);">
+                      <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" id="btn-refresh-files" title="Refresh file list">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Files Data Table -->
+              <div class="activity-table-container">
+                <table class="data-table" id="files-table">
+                  <thead>
+                    <tr>
+                      <th style="width:36%;">Filename</th>
+                      <th style="width:12%;">Type</th>
+                      <th style="width:12%;">Size</th>
+                      <th style="width:16%;">Uploaded Date</th>
+                      <th style="width:24%;text-align:right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="files-tbody">
+                    <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--color-text-muted);">Loading your documents...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: IMAGE ANALYSIS & VISION STUDIO -->
+      <section class="main-view" id="view-images">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>Multimodal Vision & Image Analysis</h2>
+            <p>Upload screenshots, diagrams, charts, UI mockups, and photos for OCR text extraction, visual reasoning, and architecture breakdowns.</p>
+          </div>
+
+          <div class="vision-studio-container">
+            <!-- Left Panel: Image Upload & Action Selectors -->
+            <div class="image-preview-card">
+              <input type="file" id="vision-file-input" style="display:none;" accept="image/png,image/jpeg,image/webp,image/gif">
+              
+              <div class="image-preview-stage" id="vision-stage" onclick="document.getElementById('vision-file-input').click()">
+                <div id="vision-empty-prompt" style="text-align:center;padding:24px;color:var(--color-text-secondary);cursor:pointer;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="44" height="44" style="color:var(--color-bright);margin-bottom:10px;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                  <div style="font-weight:600;color:#FFFFFF;margin-bottom:4px;">Click or Drag & Drop Image Here</div>
+                  <div style="font-size:12px;">Supports PNG, JPEG, WEBP, GIF (Screenshots, Diagrams, Photos)</div>
+                </div>
+                <img id="vision-preview-img" style="display:none;" alt="Selected Image Preview">
+              </div>
+
+              <!-- Metadata Bar -->
+              <div id="vision-img-meta-bar" style="display:none;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.04);border-radius:6px;font-size:12px;color:var(--color-text-secondary);">
+                <span id="vision-meta-filename">image.png</span>
+                <span id="vision-meta-dims" class="badge badge-active">1920x1080</span>
+                <button class="btn btn-sm btn-outline" style="padding:1px 6px;font-size:11px;" id="btn-clear-vision-img">Change</button>
+              </div>
+
+              <!-- Vision Analysis Presets -->
+              <div>
+                <label class="form-label" style="margin-bottom:8px;">Select Vision Analysis Mode</label>
+                <div class="vision-actions-grid">
+                  <button class="btn-vision-preset active" data-action="describe">
+                    <span>🔍</span> Detailed Description
+                  </button>
+                  <button class="btn-vision-preset" data-action="screenshot">
+                    <span>💻</span> Screenshot / UI Breakdown
+                  </button>
+                  <button class="btn-vision-preset" data-action="ocr">
+                    <span>📝</span> OCR & Text Extraction
+                  </button>
+                  <button class="btn-vision-preset" data-action="diagram">
+                    <span>📊</span> Diagram / Flowchart
+                  </button>
+                </div>
+              </div>
+
+              <!-- Custom Question Prompt -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="vision-custom-query">Custom Question or Prompt (Optional)</label>
+                <input type="text" id="vision-custom-query" class="form-input" placeholder="e.g. Transcribe the code in the editor, or Explain the database relationships...">
+              </div>
+
+              <button class="btn btn-primary" id="btn-run-vision-analysis" style="width:100%;display:flex;justify-content:center;gap:8px;align-items:center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                <span>Execute Vision Analysis</span>
+              </button>
+            </div>
+
+            <!-- Right Panel: AI Vision Output & Gallery -->
+            <div class="vision-output-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <h3 style="font-size:16px;color:#FFFFFF;margin:0;">Vision Intelligence Output</h3>
+                <div style="display:flex;gap:8px;">
+                  <button class="btn btn-outline btn-sm" id="btn-copy-vision-output" style="padding:3px 10px;font-size:12px;" title="Copy to clipboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span>Copy</span>
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="btn-open-vision-in-chat" style="padding:3px 10px;font-size:12px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    <span>Discuss in Chat</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="vision-output-body" id="vision-output-body">
+                <div style="color:var(--color-text-muted);text-align:center;padding:60px 20px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="40" height="40" style="margin-bottom:10px;opacity:0.5;">
+                    <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                  <div>Upload an image on the left and select an analysis mode to generate real-time visual intelligence.</div>
+                </div>
+              </div>
+
+              <!-- Uploaded Images Gallery -->
+              <div style="margin-top:20px;">
+                <h4 style="font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Recent Uploaded Images</h4>
+                <div class="vision-gallery-grid" id="vision-gallery-grid">
+                  <div style="font-size:12px;color:var(--color-text-muted);">No images uploaded yet.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5B: AI IMAGE GENERATION STUDIO -->
+      <section class="main-view" id="view-image-gen">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>AI Image Generation Studio</h2>
+            <p>Transform textual visions into artwork, 3D renders, and cinematic imagery powered by DALL-E & Neural Generators.</p>
+          </div>
+
+          <div class="image-gen-layout">
+            <!-- Left Column: Prompt & Generation Controls -->
+            <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+              
+              <!-- Style Selector -->
+              <div>
+                <label class="form-label" style="margin-bottom:8px;">Artistic Style & Aesthetic</label>
+                <div class="image-gen-styles-grid" id="image-gen-styles-grid">
+                  <button class="image-style-card active" data-style="photorealistic">
+                    <span class="style-icon">📸</span>
+                    <span class="style-title">Photorealistic</span>
+                  </button>
+                  <button class="image-style-card" data-style="anime">
+                    <span class="style-icon">🎨</span>
+                    <span class="style-title">Anime / Manga</span>
+                  </button>
+                  <button class="image-style-card" data-style="cyberpunk">
+                    <span class="style-icon">🌆</span>
+                    <span class="style-title">Cyberpunk Neon</span>
+                  </button>
+                  <button class="image-style-card" data-style="3d_render">
+                    <span class="style-icon">🔮</span>
+                    <span class="style-title">3D Render</span>
+                  </button>
+                  <button class="image-style-card" data-style="cinematic">
+                    <span class="style-icon">🎬</span>
+                    <span class="style-title">Cinematic Film</span>
+                  </button>
+                  <button class="image-style-card" data-style="minimalist">
+                    <span class="style-icon">📐</span>
+                    <span class="style-title">Minimalist Vector</span>
+                  </button>
+                  <button class="image-style-card" data-style="oil_painting">
+                    <span class="style-icon">🖌️</span>
+                    <span class="style-title">Oil Painting</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Aspect Ratio Selector -->
+              <div>
+                <label class="form-label" style="margin-bottom:8px;">Aspect Ratio & Dimensions</label>
+                <div class="aspect-ratio-selector" id="aspect-ratio-selector">
+                  <button class="aspect-btn active" data-aspect="1:1"><span>1:1</span> Square (1024x1024)</button>
+                  <button class="aspect-btn" data-aspect="16:9"><span>16:9</span> Landscape (1024x576)</button>
+                  <button class="aspect-btn" data-aspect="9:16"><span>9:16</span> Portrait (576x1024)</button>
+                  <button class="aspect-btn" data-aspect="4:3"><span>4:3</span> Standard (1024x768)</button>
+                </div>
+              </div>
+
+              <!-- Prompt Input -->
+              <div class="form-group" style="margin-bottom:0;display:flex;flex-direction:column;flex:1;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <label class="form-label" for="image-gen-prompt" style="margin:0;">Creative Image Prompt</label>
+                  <span style="font-size:11px;color:var(--color-text-muted);" id="image-gen-char-count">0 / 2000</span>
+                </div>
+                <textarea id="image-gen-prompt" class="form-input" style="height:110px;font-size:13px;line-height:1.5;resize:vertical;" placeholder="Describe the scene, subject, lighting, mood, color scheme, and camera angle in vivid detail... (e.g. A futuristic glass laboratory in the Alps at sunset, ultra-detailed, volumetric fog, cinematic lighting)"></textarea>
+              </div>
+
+              <!-- Prompt Preset Enhancers -->
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <span style="font-size:11px;color:var(--color-text-muted);">Inspiration:</span>
+                <button class="prompt-preset-chip" data-prompt="Futuristic holographic AI interface in a dark server room with violet neon accents and raytracing">Holo AI Server</button>
+                <button class="prompt-preset-chip" data-prompt="Majestic cybernetic wolf overlooking a glowing cyberpunk metropolis under starry skies">Cyber Wolf</button>
+                <button class="prompt-preset-chip" data-prompt="Minimalist isometric architecture model of an eco-friendly data center with waterfalls">Eco Data Center</button>
+                <button class="prompt-preset-chip" data-prompt="Ancient library carved inside a crystalline cavern illuminated by floating blue orbs">Crystal Library</button>
+              </div>
+
+              <!-- Negative Prompt (Optional) -->
+              <details style="font-size:12px;color:var(--color-text-secondary);cursor:pointer;">
+                <summary style="font-weight:600;margin-bottom:6px;">Advanced Negative Prompt (What to exclude)</summary>
+                <input type="text" id="image-gen-negative-prompt" class="form-input" placeholder="e.g. blurry, low quality, distorted, extra limbs, watermark" style="height:34px;font-size:12px;margin-top:6px;">
+              </details>
+
+              <!-- Model Selector & Submit -->
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:4px;">
+                <select id="image-gen-model-select" class="form-input" style="width:160px;height:42px;font-size:12px;">
+                  <option value="dall-e-3">DALL-E-3 (OpenAI)</option>
+                  <option value="dall-e-2">DALL-E-2 (OpenAI)</option>
+                  <option value="nexora-gen-art">NEXORA Studio Engine</option>
+                </select>
+
+                <button class="btn btn-primary" id="btn-run-image-gen" style="height:42px;padding:0 24px;display:flex;align-items:center;gap:8px;flex:1;justify-content:center;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                  <span>Generate Image</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right Column: Live Generation Preview & Gallery -->
+            <div style="display:flex;flex-direction:column;gap:18px;">
+              <!-- Current Image Preview Stage -->
+              <div class="card" style="display:flex;flex-direction:column;padding:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--color-border);">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="badge badge-active" id="image-gen-status-badge">PREVIEW STAGE</span>
+                    <span style="font-size:13px;font-weight:600;color:#FFFFFF;" id="image-gen-current-title">Generated Artwork</span>
+                  </div>
+                  <div style="display:flex;gap:6px;" id="image-gen-actions-bar">
+                    <button class="btn btn-outline btn-sm" id="btn-download-gen-image" style="padding:3px 10px;font-size:12px;" disabled title="Download PNG">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      <span>Download</span>
+                    </button>
+                    <button class="btn btn-outline btn-sm" id="btn-use-gen-in-vision" style="padding:3px 10px;font-size:12px;" disabled title="Analyze with Vision">
+                      <span>Analyze</span>
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="btn-delete-gen-image" style="padding:3px 10px;font-size:12px;" disabled title="Delete Image">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Preview Area with Loading Spinner -->
+                <div class="image-gen-stage" id="image-gen-stage">
+                  <div id="image-gen-empty-state" style="text-align:center;padding:70px 20px;color:var(--color-text-muted);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="48" height="48" style="color:var(--color-bright);margin-bottom:12px;opacity:0.6;">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    <h4 style="color:#FFFFFF;margin-bottom:6px;font-size:15px;">Ready for Creation</h4>
+                    <p style="font-size:13px;max-width:360px;margin:0 auto;">Enter a prompt and select an artistic style to generate original high-resolution imagery.</p>
+                  </div>
+
+                  <div id="image-gen-loading-state" style="display:none;text-align:center;padding:70px 20px;color:var(--color-text-main);">
+                    <div class="pulse-loader" style="width:36px;height:36px;margin:0 auto 16px auto;"></div>
+                    <div style="font-weight:700;font-size:15px;color:#FFFFFF;margin-bottom:6px;">Synthesizing AI Artwork...</div>
+                    <div style="font-size:12px;color:var(--color-text-secondary);" id="image-gen-loading-step">Applying neural diffusion & color harmonics</div>
+                  </div>
+
+                  <img id="image-gen-preview-img" style="display:none;max-width:100%;max-height:420px;border-radius:var(--radius-md);object-fit:contain;margin:0 auto;box-shadow:0 8px 30px rgba(0,0,0,0.5);" alt="AI Generated Preview">
+                </div>
+              </div>
+
+              <!-- User's Saved Creations Gallery -->
+              <div class="card" style="padding:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                  <h3 style="font-size:14px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:0;">
+                    Your Generated Gallery
+                  </h3>
+                  <button class="btn btn-outline btn-sm" id="btn-refresh-gen-gallery" style="padding:2px 8px;font-size:11px;">Refresh</button>
+                </div>
+
+                <div class="image-gen-gallery-grid" id="image-gen-gallery-grid">
+                  <div style="font-size:12px;color:var(--color-text-muted);grid-column:1/-1;text-align:center;padding:24px;">No images generated yet.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- VIEW 6: CODE STUDIO & INTELLIGENT CODING ASSISTANT -->
+      <section class="main-view" id="view-code">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>Code Studio & Engineering Intelligence</h2>
+            <p>Generate, debug, explain, refactor, optimize algorithms, and execute scripts in an isolated, secure sandbox.</p>
+          </div>
+
+          <div class="code-studio-layout">
+            <!-- Left Column: Code Editor & AI Controller -->
+            <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+              <!-- Language and Action Selector -->
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <label for="code-language-select" style="font-size:12px;font-weight:600;color:var(--color-text-secondary);">Language:</label>
+                  <select id="code-language-select" class="form-input" style="height:32px;font-size:12px;width:130px;padding:2px 8px;">
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="html">HTML / CSS</option>
+                    <option value="sql">SQL</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="go">Go</option>
+                    <option value="rust">Rust</option>
+                    <option value="bash">Bash / Shell</option>
+                    <option value="php">PHP</option>
+                  </select>
+                </div>
+
+                <div class="code-action-chips" id="code-action-chips">
+                  <button class="code-action-chip active" data-action="generate">✨ Generate</button>
+                  <button class="code-action-chip" data-action="debug">🐛 Debug</button>
+                  <button class="code-action-chip" data-action="explain">💡 Explain</button>
+                  <button class="code-action-chip" data-action="refactor">⚡ Refactor</button>
+                  <button class="code-action-chip" data-action="optimize">🚀 Optimize</button>
+                  <button class="code-action-chip" data-action="error_analysis">🔍 Error Trace</button>
+                </div>
+              </div>
+
+              <!-- Prompt / Instruction Input -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="code-prompt-input" id="code-prompt-label" style="font-size:12px;">Prompt / Task Description:</label>
+                <input type="text" id="code-prompt-input" class="form-input" placeholder="e.g. Write a thread-safe LRU cache with O(1) get and put operations in Python" style="font-size:13px;height:38px;">
+              </div>
+
+              <!-- Error Log / Trace Input (Visible when in error_analysis or debug mode) -->
+              <div class="form-group" id="code-error-group" style="display:none;margin-bottom:0;">
+                <label class="form-label" for="code-error-input" style="font-size:12px;color:var(--color-danger);">Runtime Error / Stack Trace (Optional):</label>
+                <textarea id="code-error-input" class="form-input" rows="2" placeholder="Paste traceback or compilation error here..." style="font-family:'JetBrains Mono',monospace;font-size:12px;"></textarea>
+              </div>
+
+              <!-- Code Editor -->
+              <div class="form-group" style="margin-bottom:0;display:flex;flex-direction:column;flex:1;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <label class="form-label" for="code-editor-input" style="font-size:12px;margin:0;">Source Code Editor</label>
+                  <span style="font-size:11px;color:var(--color-text-muted);font-family:monospace;" id="code-stats-info">0 lines</span>
+                </div>
+                <textarea id="code-editor-input" class="form-input" style="font-family:'JetBrains Mono',monospace;height:260px;line-height:1.5;resize:vertical;font-size:13px;" spellcheck="false"># NEXORA AI Interactive Python Sandbox
+import math
+
+def calculate_primes(limit=50):
+    """Return all prime numbers up to limit."""
+    primes = []
+    for num in range(2, limit + 1):
+        if all(num % i != 0 for i in range(2, int(math.isqrt(num)) + 1)):
+            primes.append(num)
+    return primes
+
+print(f"Prime numbers up to 50: {calculate_primes()}")
+</textarea>
+              </div>
+
+              <!-- Actions Bar -->
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div style="display:flex;gap:8px;">
+                  <button class="btn btn-primary btn-sm" id="btn-run-code-assist">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    <span>Run AI Assist</span>
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="btn-run-code-sandbox" title="Run Python code in safe, isolated subprocess (4s limit)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    <span>Run in Sandbox</span>
+                  </button>
+                </div>
+                <button class="btn btn-outline btn-sm" id="btn-clear-code-editor" style="padding:4px 10px;font-size:12px;">Clear</button>
+              </div>
+            </div>
+
+            <!-- Right Column: AI Response & Sandboxed Output -->
+            <div style="display:flex;flex-direction:column;gap:16px;">
+              <!-- AI Code Assistance Response Card -->
+              <div class="card" style="flex:1;display:flex;flex-direction:column;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid var(--color-border);padding-bottom:10px;">
+                  <div style="font-weight:600;color:#FFFFFF;font-size:14px;display:flex;align-items:center;gap:6px;">
+                    <span id="code-response-mode-badge" class="badge badge-active">AI SUGGESTION</span>
+                  </div>
+                  <div style="display:flex;gap:8px;">
+                    <button class="btn btn-outline btn-sm" id="btn-copy-code-response" style="padding:2px 8px;font-size:11px;" title="Copy code to clipboard">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      <span>Copy</span>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="btn-code-open-in-chat" style="padding:2px 8px;font-size:11px;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                      <span>Chat</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="code-response-body" id="code-ai-response-body" style="overflow-y:auto;max-height:360px;font-size:13px;line-height:1.6;color:var(--color-text-main);">
+                  <div style="color:var(--color-text-muted);text-align:center;padding:48px 16px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="36" height="36" style="margin-bottom:10px;opacity:0.5;">
+                      <polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                    <div>Choose an action (Generate, Debug, Explain, Refactor, Optimize, Error Trace) and click Run AI Assist.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sandboxed Execution Console -->
+              <div class="card" id="code-sandbox-panel" style="background:#06060A;border:1px solid var(--color-border);padding:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--color-success);"></span>
+                    <span style="font-size:12px;font-weight:600;color:var(--color-text-secondary);">Sandboxed Execution Console</span>
+                  </div>
+                  <span id="code-sandbox-meta" style="font-size:11px;color:var(--color-text-muted);font-family:monospace;">Host Protected • 4.0s Cap</span>
+                </div>
+                <pre id="code-sandbox-output" style="margin:0;padding:10px;background:rgba(255,255,255,0.02);border-radius:var(--radius-sm);font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--color-text-main);max-height:140px;overflow-y:auto;white-space:pre-wrap;">Ready to run. Click 'Run in Sandbox' to safely execute Python code.</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 7: WRITING STUDIO & EDITORIAL INTELLIGENCE -->
+      <section class="main-view" id="view-writing">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>Writing Studio & Editorial Intelligence</h2>
+            <p>Rewrite, fix grammar, summarize, expand, format executive emails, optimize resumes, and translate across 10+ languages.</p>
+          </div>
+
+          <!-- Mode Selection Tabs -->
+          <div class="writing-mode-tabs" id="writing-mode-tabs">
+            <button class="writing-tab active" data-action="rewrite">🔄 Rewrite & Polish</button>
+            <button class="writing-tab" data-action="grammar">✅ Grammar & Spell</button>
+            <button class="writing-tab" data-action="summarize">📑 Summarize</button>
+            <button class="writing-tab" data-action="expand">📈 Expand Draft</button>
+            <button class="writing-tab" data-action="shorten">📉 Shorten</button>
+            <button class="writing-tab" data-action="professional">💼 Executive Tone</button>
+            <button class="writing-tab" data-action="email">✉️ Email Composer</button>
+            <button class="writing-tab" data-action="resume">📄 Resume Bullets</button>
+            <button class="writing-tab" data-action="cover_letter">📝 Cover Letter</button>
+            <button class="writing-tab" data-action="translate">🌐 Translate</button>
+          </div>
+
+          <div class="writing-studio-layout">
+            <!-- Left Column: Input Draft & Configuration -->
+            <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+              <!-- Options Bar: Tone & Language Selectors -->
+              <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                <!-- Tone Selector -->
+                <div style="display:flex;align-items:center;gap:6px;" id="writing-tone-container">
+                  <label for="writing-tone-select" style="font-size:12px;color:var(--color-text-secondary);font-weight:600;">Tone:</label>
+                  <select id="writing-tone-select" class="form-input" style="height:32px;font-size:12px;width:130px;padding:2px 8px;">
+                    <option value="professional">Professional</option>
+                    <option value="casual">Casual & Friendly</option>
+                    <option value="academic">Academic / Formal</option>
+                    <option value="creative">Creative & Engaging</option>
+                    <option value="concise">Direct & Concise</option>
+                    <option value="persuasive">Persuasive / Sales</option>
+                  </select>
+                </div>
+
+                <!-- Target Language Selector (Visible during translate) -->
+                <div style="display:none;align-items:center;gap:6px;" id="writing-lang-container">
+                  <label for="writing-lang-select" style="font-size:12px;color:var(--color-text-secondary);font-weight:600;">Target Language:</label>
+                  <select id="writing-lang-select" class="form-input" style="height:32px;font-size:12px;width:130px;padding:2px 8px;">
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="German">German</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="Chinese">Chinese (Mandarin)</option>
+                    <option value="Hindi">Hindi</option>
+                    <option value="Arabic">Arabic</option>
+                    <option value="Russian">Russian</option>
+                    <option value="Portuguese">Portuguese</option>
+                    <option value="Italian">Italian</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Contextual Fields (Email recipient / Job title / Company) -->
+              <div id="writing-context-fields" style="display:none;gap:10px;flex-wrap:wrap;">
+                <input type="text" id="writing-recipient-input" class="form-input" placeholder="Recipient / Audience (e.g. Hiring Manager, VP of Engineering)" style="height:34px;font-size:12px;flex:1;min-width:180px;">
+                <input type="text" id="writing-job-title-input" class="form-input" placeholder="Job Title / Role (e.g. Staff Full Stack Engineer)" style="height:34px;font-size:12px;flex:1;min-width:180px;">
+                <input type="text" id="writing-company-input" class="form-input" placeholder="Company Name (e.g. Acme Cloud Systems)" style="height:34px;font-size:12px;flex:1;min-width:180px;">
+              </div>
+
+              <!-- Input Draft Textarea -->
+              <div class="form-group" style="margin-bottom:0;display:flex;flex-direction:column;flex:1;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <label class="form-label" for="writing-input-text" id="writing-input-label" style="font-size:12px;margin:0;">Source Content or Prompt</label>
+                  <span class="writing-stat-badge" id="writing-input-stats">0 words • 0 chars</span>
+                </div>
+                <textarea id="writing-input-text" class="form-input" style="height:260px;line-height:1.6;font-size:14px;resize:vertical;" placeholder="Enter or paste your draft, bullet points, email notes, or document here..."></textarea>
+              </div>
+
+              <!-- Submit Button Bar -->
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <button class="btn btn-primary" id="btn-run-writing-assist" style="display:flex;align-items:center;gap:8px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                  <span id="writing-btn-text">Rewrite Text</span>
+                </button>
+                <button class="btn btn-outline btn-sm" id="btn-clear-writing-input" style="padding:4px 10px;font-size:12px;">Clear Input</button>
+              </div>
+            </div>
+
+            <!-- Right Column: Editorial AI Output -->
+            <div class="card" style="display:flex;flex-direction:column;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid var(--color-border);padding-bottom:10px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span id="writing-result-badge" class="badge badge-active">EDITED OUTPUT</span>
+                  <span id="writing-output-stats" class="writing-stat-badge">0 words</span>
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <button class="btn btn-outline btn-sm" id="btn-copy-writing-output" style="padding:2px 8px;font-size:11px;" title="Copy to clipboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span>Copy</span>
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="btn-writing-open-in-chat" style="padding:2px 8px;font-size:11px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    <span>Chat</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Output Body -->
+              <div class="writing-output-body" id="writing-output-body" style="overflow-y:auto;max-height:420px;font-size:14px;line-height:1.7;color:var(--color-text-main);flex:1;">
+                <div style="color:var(--color-text-muted);text-align:center;padding:60px 16px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="36" height="36" style="margin-bottom:10px;opacity:0.5;">
+                    <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                  </svg>
+                  <div>Select a writing tool tab on top, paste your draft, and generate instant editorial improvements.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 7: SETTINGS & PROFILE -->
+      <section class="main-view" id="view-settings">
+        <div class="view-content-wrapper">
+          <div class="view-header">
+            <h2>Platform Settings & Security</h2>
+            <p>Manage model configurations, system prompts, API keys, password, and security audit trails.</p>
+          </div>
+
+          <div class="settings-grid">
+            
+            <!-- Personalization & AI Tone Preferences Card -->
+            <div class="card" id="card-personalization">
+              <h3 style="font-size:18px;margin-bottom:6px;color:#FFFFFF;">Personalization & Experience</h3>
+              <p style="font-size:12px;color:var(--color-text-muted);margin-bottom:16px;">Customize how NEXORA AI responds, addresses you, and renders code across the workspace.</p>
+
+              <div class="form-group">
+                <label class="form-label" for="pref-display-name">Your Display Name</label>
+                <input type="text" id="pref-display-name" class="form-input" placeholder="e.g. Alex, Dr. Miller, Senior Engineer">
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-group">
+                  <label class="form-label" for="pref-preferred-lang">Preferred Language</label>
+                  <select id="pref-preferred-lang" class="form-input">
+                    <option value="English">English</option>
+                    <option value="Spanish">Spanish (Español)</option>
+                    <option value="French">French (Français)</option>
+                    <option value="German">German (Deutsch)</option>
+                    <option value="Japanese">Japanese (日本語)</option>
+                    <option value="Chinese">Chinese (中文)</option>
+                    <option value="Hindi">Hindi (हिन्दी)</option>
+                    <option value="Arabic">Arabic (العربية)</option>
+                    <option value="Portuguese">Portuguese (Português)</option>
+                    <option value="Italian">Italian (Italiano)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="pref-ai-tone">AI Response Style & Tone</label>
+                  <select id="pref-ai-tone" class="form-input">
+                    <option value="balanced">Balanced & Helpful</option>
+                    <option value="concise">Direct & Concise (Bullet Points)</option>
+                    <option value="detailed">In-Depth & Comprehensive</option>
+                    <option value="technical">Principal Architect / Deep Technical</option>
+                    <option value="creative">Creative & Brainstorming</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-group">
+                  <label class="form-label" for="pref-ui-theme">Interface Theme</label>
+                  <select id="pref-ui-theme" class="form-input">
+                    <option value="light">☀️ White Theme</option>
+                    <option value="dark">🌙 Dark Theme</option>
+                    <option value="system">🖥️ System Default</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="pref-code-theme">Code Syntax Theme</label>
+                  <select id="pref-code-theme" class="form-input">
+                    <option value="atom-one-dark">Atom One Dark</option>
+                    <option value="dracula">Dracula Dark</option>
+                    <option value="monokai">Monokai Pro</option>
+                    <option value="github-dark">GitHub Dark</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="pref-custom-instructions">Global AI Persona & Custom Instructions</label>
+                <textarea id="pref-custom-instructions" class="form-input" rows="3" placeholder="e.g. Always write clean Python code with type hints, never truncate code examples, and explain trade-offs."></textarea>
+              </div>
+
+              <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+                <input type="checkbox" id="pref-auto-speak" style="width:16px;height:16px;accent-color:var(--color-primary);cursor:pointer;">
+                <label for="pref-auto-speak" style="font-size:13px;color:var(--color-text-secondary);cursor:pointer;margin:0;">
+                  Auto-speak AI responses aloud using Voice Synthesizer
+                </label>
+              </div>
+
+              <button class="btn btn-primary btn-sm" id="btn-save-personalization">Save Personalization Preferences</button>
+            </div>
+
+            <!-- Controlled Memory Architecture Card -->
+            <div class="card" id="card-memory-management" style="grid-column: 1 / -1;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid var(--color-border);padding-bottom:12px;flex-wrap:wrap;gap:10px;">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <h3 style="font-size:18px;margin:0;color:#FFFFFF;">Controlled Memory & Retained Knowledge</h3>
+                    <span id="memory-status-badge" class="badge badge-active">MEMORY ACTIVE</span>
+                  </div>
+                  <p style="font-size:12px;color:var(--color-text-muted);margin:4px 0 0 0;">
+                    NEXORA AI transparently remembers preferences and contextual facts you choose to retain. You can view, disable, or delete any memory item at any time.
+                  </p>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <label class="switch-toggle" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;">
+                    <span>Enable AI Memory:</span>
+                    <input type="checkbox" id="toggle-global-memory" checked style="width:16px;height:16px;accent-color:var(--color-primary);cursor:pointer;">
+                  </label>
+                  <button class="btn btn-primary btn-sm" id="btn-open-create-memory-modal" style="font-size:12px;padding:4px 10px;">+ Add Memory</button>
+                  <button class="btn btn-danger btn-sm" id="btn-clear-all-memories" style="font-size:12px;padding:4px 10px;">Purge All</button>
+                </div>
+              </div>
+
+              <!-- Live Memories Table -->
+              <div class="activity-table-container">
+                <table class="data-table" id="memories-table">
+                  <thead>
+                    <tr>
+                      <th style="width:110px;">Category</th>
+                      <th style="width:180px;">Memory Key</th>
+                      <th>Retained Knowledge / Fact</th>
+                      <th style="width:90px;text-align:center;">Active</th>
+                      <th style="width:80px;text-align:right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="memories-tbody">
+                    <tr><td colspan="5" style="text-align:center;color:var(--color-text-muted);">Loading retained memories...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Profile & Account Details Card -->
+            <div class="card">
+              <h3 style="font-size: 18px; margin-bottom: 16px;">Account Details</h3>
+              <div class="form-group">
+                <div class="field-label">Email Address</div>
+                <div class="field-value" id="profile-email">-</div>
+              </div>
+              <div class="form-group">
+                <div class="field-label">User ID</div>
+                <div class="field-value" id="profile-userId" style="font-family:monospace;font-size:12px;">-</div>
+              </div>
+              <div class="form-group">
+                <div class="field-label">Role</div>
+                <div class="field-value" id="profile-role">-</div>
+              </div>
+              <div class="form-group">
+                <div class="field-label">Account Status</div>
+                <div id="profile-status">-</div>
+              </div>
+              <div class="form-group">
+                <div class="field-label">Email Verification</div>
+                <div id="profile-verified">-</div>
+              </div>
+            </div>
+
+            <!-- Password Change Card -->
+            <div class="card">
+              <h3 style="font-size:18px;margin-bottom:16px;">Security & Password</h3>
+              <form id="change-password-form">
+                <div class="form-group">
+                  <label class="form-label" for="current-password">Current Password</label>
+                  <input type="password" id="current-password" class="form-input" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-password">New Password</label>
+                  <input type="password" id="new-password" class="form-input" required minlength="8">
+                </div>
+                <button type="submit" class="btn btn-secondary btn-sm" id="btn-submit-password">Update Password</button>
+              </form>
+            </div>
+
+            <!-- Activity Logs Card -->
+            <div class="card" style="grid-column:1 / -1;">
+              <h3 style="font-size:18px;margin-bottom:16px;">Audit & Security Activity</h3>
+              <div class="activity-table-container">
+                <table class="data-table" id="activity-table">
+                  <thead>
+                    <tr>
+                      <th>Action</th>
+                      <th>Details</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody id="activity-tbody">
+                    <tr><td colspan="3" style="text-align:center;">Loading audit logs...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- About NEXORA AI & Leadership Card -->
+            <div class="card" style="grid-column:1 / -1; background:linear-gradient(180deg, rgba(229,231,235,0.04) 0%, rgba(18,18,28,0.6) 100%); border:1px solid var(--color-border);">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--color-bright);text-transform:uppercase;">Platform Identity</div>
+                  <h3 style="font-size:18px;margin:2px 0 0 0;color:#FFFFFF;">About NEXORA AI &amp; Executive Leadership</h3>
+                </div>
+                <div class="badge badge-owner" style="font-size:11px;">Official Leadership</div>
+              </div>
+              <p style="color:var(--color-text-secondary);font-size:13.5px;line-height:1.6;margin-bottom:20px;">
+                NEXORA AI is a production-grade unified multi-modal intelligence workspace providing state-of-the-art AI chat, document vision, code generation, real-time audio, and sandboxed intelligence tools.
+              </p>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:16px;">
+                <div style="padding:16px;border-radius:var(--radius-md);background:var(--color-primary-subtle);border:1px solid rgba(229,231,235,0.25);display:flex;align-items:center;gap:14px;">
+                  <div style="font-size:28px;">👑</div>
+                  <div>
+                    <div style="font-size:11px;font-weight:700;color:var(--color-bright);text-transform:uppercase;letter-spacing:1px;">Owner</div>
+                    <div style="font-size:16px;font-weight:700;color:#FFFFFF;">Nithish Kumar R</div>
+                    <div style="font-size:12px;color:var(--color-text-muted);">Founder &amp; Platform Architect</div>
+                  </div>
+                </div>
+                <div style="padding:16px;border-radius:var(--radius-md);background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.3);display:flex;align-items:center;gap:14px;">
+                  <div style="font-size:28px;">🚀</div>
+                  <div>
+                    <div style="font-size:11px;font-weight:700;color:#06B6D4;text-transform:uppercase;letter-spacing:1px;">CEO</div>
+                    <div style="font-size:16px;font-weight:700;color:#FFFFFF;">Dhanushiya S</div>
+                    <div style="font-size:12px;color:var(--color-text-muted);">Chief Executive Officer</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 8: OWNER CONSOLE -->
+      <section class="main-view" id="view-owner">
+        <div class="view-content-wrapper">
+          <div class="view-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+              <h2>Platform Owner Administration</h2>
+              <p>System-wide telemetry, user directory, access governance, and real-time login audit logs.</p>
+            </div>
+            <div>
+              <button class="btn btn-secondary btn-sm" id="owner-refresh-btn" onclick="loadOwnerData()" style="display:flex;align-items:center;gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh Metrics
+              </button>
+            </div>
+          </div>
+
+          <!-- Executive Leadership Governance Banner -->
+          <div class="card" style="margin-bottom:24px; background:linear-gradient(135deg, rgba(229,231,235,0.06) 0%, rgba(6,182,212,0.12) 100%); border:1px solid var(--color-border-glow);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+              <div>
+                <span style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--color-bright);">Executive Leadership Governance</span>
+                <h3 style="font-size:20px; margin:4px 0 6px 0; color:#FFFFFF;">NEXORA AI Executive Board</h3>
+                <p style="color:var(--color-text-secondary); margin:0; font-size:13px;">Official platform ownership and executive administration governing NEXORA AI systems.</p>
+              </div>
+              <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.3); padding:8px 16px; border-radius:var(--radius-md); border:1px solid rgba(229,231,235,0.25);">
+                  <span style="font-size:20px;">👑</span>
+                  <div>
+                    <div style="font-size:11px; color:var(--color-bright); font-weight:700;">OWNER</div>
+                    <div style="font-size:14px; font-weight:700; color:#FFFFFF;">Nithish Kumar R</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.3); padding:8px 16px; border-radius:var(--radius-md); border:1px solid rgba(6,182,212,0.3);">
+                  <span style="font-size:20px;">🚀</span>
+                  <div>
+                    <div style="font-size:11px; color:#06B6D4; font-weight:700;">CEO</div>
+                    <div style="font-size:14px; font-weight:700; color:#FFFFFF;">Dhanushiya S</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Platform Telemetry Grid -->
+          <div class="metrics-grid" style="grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:16px; margin-bottom:24px;">
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">Total Users</span></div>
+              <div class="metric-value" id="owner-total-users">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">New Users (Today)</span></div>
+              <div class="metric-value" id="owner-new-today" style="color:var(--color-primary);">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">New Users (7 Days)</span></div>
+              <div class="metric-value" id="owner-new-week" style="color:var(--color-bright);">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">Active Accounts</span></div>
+              <div class="metric-value" id="owner-active-users" style="color:var(--color-success);">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">Login Events</span></div>
+              <div class="metric-value" id="owner-login-events">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">AI Assistant Requests</span></div>
+              <div class="metric-value" id="owner-ai-requests" style="color:var(--color-primary);">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">Document & File Uploads</span></div>
+              <div class="metric-value" id="owner-file-uploads">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">AI Search Queries</span></div>
+              <div class="metric-value" id="owner-search-requests">-</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-header"><span class="metric-title">Image Generations</span></div>
+              <div class="metric-value" id="owner-image-gens">-</div>
+            </div>
+          </div>
+
+          <!-- User Directory & RBAC Governance -->
+          <div class="card" style="margin-bottom:24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+              <h3 style="font-size:18px;margin:0;">User Governance Directory</h3>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <input type="text" id="owner-user-search" class="form-input" placeholder="Search by email..." style="width:220px;padding:6px 12px;font-size:13px;" oninput="debounceOwnerUserSearch()">
+                <select id="owner-user-role-filter" class="form-input" style="width:130px;padding:6px 12px;font-size:13px;" onchange="loadOwnerData()">
+                  <option value="">All Roles</option>
+                  <option value="USER">USER</option>
+                  <option value="OWNER">OWNER</option>
+                </select>
+                <select id="owner-user-status-filter" class="form-input" style="width:150px;padding:6px 12px;font-size:13px;" onchange="loadOwnerData()">
+                  <option value="">All Statuses</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
+                  <option value="PENDING_VERIFICATION">PENDING</option>
+                </select>
+              </div>
+            </div>
+            <div class="activity-table-container">
+              <table class="data-table" id="owner-users-table">
+                <thead>
+                  <tr>
+                    <th>User / Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Logins</th>
+                    <th>Registered</th>
+                    <th>Last Active</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="owner-users-tbody">
+                  <tr><td colspan="7" style="text-align:center;">Loading users...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Real-Time Login Activity Audit -->
+          <div class="card">
+            <h3 style="font-size:18px;margin-bottom:16px;">Recent Login Activity & Telemetry</h3>
+            <div class="activity-table-container">
+              <table class="data-table" id="owner-login-activity-table">
+                <thead>
+                  <tr>
+                    <th>User Email</th>
+                    <th>Date & Time</th>
+                    <th>Device / Browser</th>
+                    <th>IP Address</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="owner-logins-tbody">
+                  <tr><td colspan="5" style="text-align:center;">Loading login activity...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Rename Conversation Modal -->
+  <div class="modal-backdrop" id="modal-rename-conv" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Rename Conversation</h3>
+      <input type="text" id="input-rename-conv" class="form-input" style="margin-top:16px;" placeholder="Enter new conversation title...">
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-rename">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-save-rename">Save Title</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Conversation Confirm Modal -->
+  <div class="modal-backdrop" id="modal-delete-conv" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Delete Conversation</h3>
+      <p style="color:var(--color-text-secondary);font-size:14px;margin-top:8px;">Are you sure you want to delete this conversation? All messages will be permanently removed.</p>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-delete">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btn-confirm-delete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 3: Document AI Action Modal -->
+  <div class="modal-backdrop-large" id="modal-doc-ai" style="display:none;">
+    <div class="modal-card-large">
+      <div class="modal-header-large">
+        <div>
+          <h3 class="modal-title" id="doc-ai-modal-title">Document Intelligence</h3>
+          <p style="font-size:12px;color:var(--color-text-muted);margin:2px 0 0 0;" id="doc-ai-modal-subtitle">Analyzing document...</p>
+        </div>
+        <button class="btn btn-sm btn-outline" id="btn-close-doc-ai-modal" style="padding:4px 8px;font-size:16px;">&times;</button>
+      </div>
+      
+      <!-- Interactive query bar (for Q&A, Explain, custom inquiries) -->
+      <div style="padding:14px 24px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--color-border);display:flex;gap:10px;" id="doc-ai-query-bar">
+        <input type="text" id="doc-ai-custom-query" class="form-input" style="height:38px;font-size:13px;" placeholder="Ask a question or enter query about this document...">
+        <button class="btn btn-primary btn-sm" id="btn-submit-doc-ai-query" style="white-space:nowrap;padding:0 16px;">Ask AI</button>
+      </div>
+
+      <div class="modal-body-large" id="doc-ai-modal-body">
+        <div style="text-align:center;padding:40px;color:var(--color-text-muted);">
+          <div class="pulse-loader" style="margin-bottom:12px;"></div>
+          <div>Synthesizing document intelligence...</div>
+        </div>
+      </div>
+
+      <div class="modal-footer-large">
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" id="btn-doc-ai-summarize">📄 Summarize</button>
+          <button class="btn btn-outline btn-sm" id="btn-doc-ai-notes">📝 Notes</button>
+          <button class="btn btn-outline btn-sm" id="btn-doc-ai-extract">📊 Extract</button>
+          <button class="btn btn-outline btn-sm" id="btn-doc-ai-questions">🎯 Questions</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" id="btn-copy-doc-ai-result">Copy Result</button>
+          <button class="btn btn-primary btn-sm" id="btn-chat-with-doc">Open in Chat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 3: Document Content / Text Preview Modal -->
+  <div class="modal-backdrop-large" id="modal-doc-preview" style="display:none;">
+    <div class="modal-card-large">
+      <div class="modal-header-large">
+        <div>
+          <h3 class="modal-title" id="doc-preview-modal-title">Document Content Preview</h3>
+          <p style="font-size:12px;color:var(--color-text-muted);margin:2px 0 0 0;" id="doc-preview-modal-meta">Extracted Text</p>
+        </div>
+        <button class="btn btn-sm btn-outline" id="btn-close-doc-preview-modal" style="padding:4px 8px;font-size:16px;">&times;</button>
+      </div>
+      <div class="modal-body-large">
+        <pre id="doc-preview-text" style="white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;color:var(--color-text-main);background:#08080E;padding:16px;border-radius:var(--radius-md);border:1px solid var(--color-border);margin:0;"></pre>
+      </div>
+      <div class="modal-footer-large" style="justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-copy-preview-text">Copy Text</button>
+        <button class="btn btn-primary btn-sm" id="btn-close-preview-footer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 3: Delete File Confirm Modal -->
+  <div class="modal-backdrop" id="modal-delete-file" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Delete File</h3>
+      <p style="color:var(--color-text-secondary);font-size:14px;margin-top:8px;" id="delete-file-confirm-text">Are you sure you want to delete this file? This action cannot be undone.</p>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-file-delete">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btn-confirm-file-delete">Delete File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 5: Delete Generated Image Confirm Modal -->
+  <div class="modal-backdrop" id="modal-delete-gen-image" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Delete Generated Image</h3>
+      <p style="color:var(--color-text-secondary);font-size:14px;margin-top:8px;">Are you sure you want to delete this artwork? The image file will be permanently removed.</p>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-gen-delete">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btn-confirm-gen-delete">Delete Image</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 5: Live Voice Recording Modal -->
+  <div class="modal-backdrop" id="modal-voice-recording" style="display:none;">
+    <div class="modal-card" style="max-width:440px;text-align:center;padding:28px;">
+      <div class="voice-wave-animation" id="voice-wave-animation">
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+      </div>
+      <h3 style="color:#FFFFFF;margin:16px 0 6px 0;font-size:17px;" id="voice-recording-modal-title">Listening to Your Voice...</h3>
+      <div style="font-size:14px;color:var(--color-bright);font-family:monospace;font-weight:700;margin-bottom:10px;" id="voice-recording-timer">00:00</div>
+      <p style="font-size:12px;color:var(--color-text-muted);margin-bottom:20px;" id="voice-recording-hint">Speak clearly into your microphone. Click Finish when done.</p>
+
+      <div style="display:flex;justify-content:center;gap:12px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-voice-record">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-finish-voice-record" style="background:var(--color-danger);border-color:var(--color-danger);">
+          <span>⏹️ Finish & Transcribe</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Create Project Modal -->
+  <div class="modal-backdrop" id="modal-create-project" style="display:none;">
+    <div class="modal-card" style="max-width:520px;">
+      <h3 class="modal-title">Create New Project Workspace</h3>
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label" for="proj-create-name">Project Name</label>
+        <input type="text" id="proj-create-name" class="form-input" placeholder="e.g. Distributed Ledger Engine, AI Research Hub" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="proj-create-desc">Description (Optional)</label>
+        <input type="text" id="proj-create-desc" class="form-input" placeholder="Brief overview of objectives and milestones">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="proj-create-inst">Custom System Instructions & Domain Rules (Optional)</label>
+        <textarea id="proj-create-inst" class="form-input" rows="3" placeholder="e.g. Always write production Python with type hints. Focus on high throughput and zero allocations."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Project Color Accent</label>
+        <div style="display:flex;gap:8px;" id="proj-color-picker">
+          <button type="button" class="color-swatch-btn active" data-color="#8B5CF6" style="background:#8B5CF6;width:26px;height:26px;border-radius:50%;border:2px solid #FFFFFF;cursor:pointer;"></button>
+          <button type="button" class="color-swatch-btn" data-color="#3B82F6" style="background:#3B82F6;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;"></button>
+          <button type="button" class="color-swatch-btn" data-color="#10B981" style="background:#10B981;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;"></button>
+          <button type="button" class="color-swatch-btn" data-color="#F59E0B" style="background:#F59E0B;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;"></button>
+          <button type="button" class="color-swatch-btn" data-color="#EC4899" style="background:#EC4899;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;"></button>
+          <button type="button" class="color-swatch-btn" data-color="#06B6D4" style="background:#06B6D4;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;"></button>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-create-project">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-confirm-create-project">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Edit Project Modal -->
+  <div class="modal-backdrop" id="modal-edit-project" style="display:none;">
+    <div class="modal-card" style="max-width:520px;">
+      <h3 class="modal-title">Edit Project Workspace</h3>
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label" for="proj-edit-name">Project Name</label>
+        <input type="text" id="proj-edit-name" class="form-input" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="proj-edit-desc">Description</label>
+        <input type="text" id="proj-edit-desc" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="proj-edit-inst">Custom System Instructions & Domain Rules</label>
+        <textarea id="proj-edit-inst" class="form-input" rows="3"></textarea>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-edit-project">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-confirm-edit-project">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Delete Project Confirm Modal -->
+  <div class="modal-backdrop" id="modal-delete-project" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Delete Project Workspace</h3>
+      <p style="color:var(--color-text-secondary);font-size:14px;margin-top:8px;">Are you sure you want to delete this project? All project notes, saved outputs, and project workspace links will be permanently deleted.</p>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-delete-project">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btn-confirm-delete-project">Delete Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Add Note Modal -->
+  <div class="modal-backdrop" id="modal-add-project-note" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <h3 class="modal-title" id="project-note-modal-title">Add Project Note</h3>
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label" for="note-input-title">Note Title</label>
+        <input type="text" id="note-input-title" class="form-input" placeholder="e.g. Architecture Decisions, API Specifications" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="note-input-content">Note Content (Markdown supported)</label>
+        <textarea id="note-input-content" class="form-input" rows="7" placeholder="Write notes, architecture plans, schema outlines, or brainstorms..."></textarea>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-add-note">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-confirm-save-note">Save Note</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Add Saved Output Modal -->
+  <div class="modal-backdrop" id="modal-save-project-output" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <h3 class="modal-title">Save Output to Project</h3>
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label" for="output-input-title">Output Title / Label</label>
+        <input type="text" id="output-input-title" class="form-input" placeholder="e.g. Optimized Sorting Algorithm, Research Synthesis" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="output-input-type">Output Type</label>
+        <select id="output-input-type" class="form-input">
+          <option value="text">General Text / Notes</option>
+          <option value="code">Source Code Snippet</option>
+          <option value="summary">Document / Research Summary</option>
+          <option value="search">AI Search Synthesis</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="output-input-content">Content</label>
+        <textarea id="output-input-content" class="form-input" rows="6" placeholder="Paste snippet, generated text, or artifact..."></textarea>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-save-output">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-confirm-save-output">Save to Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Link File to Project Modal -->
+  <div class="modal-backdrop" id="modal-link-project-file" style="display:none;">
+    <div class="modal-card" style="max-width:480px;">
+      <h3 class="modal-title">Link Document to Project</h3>
+      <p style="font-size:12px;color:var(--color-text-secondary);margin:6px 0 14px 0;">Select a document from your uploaded Files & Docs repository to link to this project.</p>
+      <div class="form-group">
+        <label class="form-label" for="select-project-file-to-link">Available User Documents</label>
+        <select id="select-project-file-to-link" class="form-input">
+          <option value="">Loading files...</option>
+        </select>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-link-file">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-confirm-link-file">Link File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Create User Memory Modal -->
+  <div class="modal-backdrop" id="modal-create-memory" style="display:none;">
+    <div class="modal-card" style="max-width:480px;">
+      <h3 class="modal-title">Add Controlled Memory Item</h3>
+      <p style="font-size:12px;color:var(--color-text-secondary);margin:6px 0 14px 0;">Explicitly save a key fact, coding preference, or project context for NEXORA AI to retain across sessions.</p>
+      
+      <div class="form-group">
+        <label class="form-label" for="memory-input-category">Memory Category</label>
+        <select id="memory-input-category" class="form-input">
+          <option value="preference">Preference (Coding / Style / Language)</option>
+          <option value="context">Background Context (Role / Company / Domain)</option>
+          <option value="skill">Skill & Tools (Preferred libraries / Tech stack)</option>
+          <option value="instruction">Special Instruction (Always / Never rules)</option>
+          <option value="project">Project Knowledge (Domain rules)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="memory-input-key">Memory Key / Topic</label>
+        <input type="text" id="memory-input-key" class="form-input" placeholder="e.g. Backend Tech Stack, Writing Tone, Architecture Style" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="memory-input-value">Retained Knowledge / Fact</label>
+        <textarea id="memory-input-value" class="form-input" rows="3" placeholder="e.g. Uses FastAPI with Pydantic v2 and async SQLite. Prefers clean decoupled service layer." required></textarea>
+      </div>
+
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-create-memory">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btn-confirm-create-memory">Save Memory</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 6: Clear All Memories Confirm Modal -->
+  <div class="modal-backdrop" id="modal-clear-memories" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Purge All Retained Memories</h3>
+      <p style="color:var(--color-text-secondary);font-size:14px;margin-top:8px;">Are you sure you want to delete all saved memories? NEXORA AI will forget all custom preferences and retained facts.</p>
+      <div class="modal-actions" style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="btn-cancel-clear-memories">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btn-confirm-clear-memories">Purge Memories</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/chat.js"></script>
+  <script src="/js/app.js"></script>
+
+</body>
+</html>
