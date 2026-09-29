@@ -4,6 +4,13 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Any, Optional, Dict, List
 import aiosqlite
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
 from backend.app.config import settings
 
 # Global PostgreSQL connection pool reference
