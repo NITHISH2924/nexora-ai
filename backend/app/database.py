@@ -249,6 +249,9 @@ class PgConnectionWrapper:
         converted = re.sub(r'COLLATE\s+NOCASE', '', converted, flags=re.IGNORECASE)
         # Convert AUTOINCREMENT to SERIAL syntax in create statements if present
         converted = re.sub(r'INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT', 'SERIAL PRIMARY KEY', converted, flags=re.IGNORECASE)
+        # Strip SQLite-only rowid references
+        converted = re.sub(r',\s*rowid\s+(ASC|DESC)?', '', converted, flags=re.IGNORECASE)
+        converted = re.sub(r'\browid\b', 'id', converted, flags=re.IGNORECASE)
         return converted
 
     def execute(self, sql: str, params: Any = None) -> PgExecuteContextManager:

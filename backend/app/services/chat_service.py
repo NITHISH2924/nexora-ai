@@ -124,9 +124,9 @@ class ChatService:
                     detail="Conversation not found or access denied"
                 )
 
-            # 2. Fetch all messages ordered by timestamp and rowid
+            # 2. Fetch all messages ordered by timestamp
             cursor_msg = await db.execute("""
-            SELECT * FROM messages WHERE conversationId = ? ORDER BY createdAt ASC, rowid ASC
+            SELECT * FROM messages WHERE conversationId = ? ORDER BY createdAt ASC
             """, (conversation_id,))
             msg_rows = await cursor_msg.fetchall()
 
@@ -282,7 +282,7 @@ class ChatService:
         async with get_db() as db:
             # 1. Fetch message and verify ownership
             cursor = await db.execute(
-                "SELECT rowid, * FROM messages WHERE id = ? AND conversationId = ? AND userId = ?",
+                "SELECT * FROM messages WHERE id = ? AND conversationId = ? AND userId = ?",
                 (message_id, conversation_id, user_id)
             )
             msg = await cursor.fetchone()
@@ -293,12 +293,11 @@ class ChatService:
                 )
 
             msg_created_at = msg["createdAt"]
-            msg_rowid = msg["rowid"]
 
-            # 2. Delete all messages created AFTER this message in the conversation (using rowid & createdAt)
+            # 2. Delete all messages created AFTER this message in the conversation
             await db.execute(
-                "DELETE FROM messages WHERE conversationId = ? AND (createdAt > ? OR (createdAt = ? AND rowid > ?))",
-                (conversation_id, msg_created_at, msg_created_at, msg_rowid)
+                "DELETE FROM messages WHERE conversationId = ? AND createdAt > ?",
+                (conversation_id, msg_created_at)
             )
 
             # 3. Update the target message content
@@ -336,7 +335,7 @@ class ChatService:
 
             # Check if last message is assistant
             cursor_last = await db.execute(
-                "SELECT * FROM messages WHERE conversationId = ? ORDER BY createdAt DESC, rowid DESC LIMIT 1",
+                "SELECT * FROM messages WHERE conversationId = ? ORDER BY createdAt DESC LIMIT 1",
                 (conversation_id,)
             )
             last_msg = await cursor_last.fetchone()
@@ -346,11 +345,10 @@ class ChatService:
 
             # Return remaining history
             cursor_all = await db.execute(
-                "SELECT role, content FROM messages WHERE conversationId = ? ORDER BY createdAt ASC, rowid ASC",
+                "SELECT role, content FROM messages WHERE conversationId = ? ORDER BY createdAt ASC",
                 (conversation_id,)
             )
             rows = await cursor_all.fetchall()
-            return [{"role": r["role"], "content": r["content"]} for r in rows]
             return [{"role": r["role"], "content": r["content"]} for r in rows]
 
 chat_service = ChatService()
