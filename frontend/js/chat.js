@@ -539,9 +539,23 @@ class ChatController {
       onError: (err) => {
         this.setStreamingState(false);
         if (bubbleEl) {
-          bubbleEl.innerHTML = `<div style="color:var(--color-danger);padding:8px 0;"><strong>Error:</strong> ${this.escapeHtml(err.message)}</div>`;
+          bubbleEl.innerHTML = `
+            <div class="chat-stream-error" style="color:var(--color-danger);padding:8px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <span><strong>Error:</strong> ${this.escapeHtml(err.message || 'Generation failed')}</span>
+              <button class="btn btn-secondary btn-sm btn-retry-stream" style="display:inline-flex;align-items:center;gap:6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
+                <span>Retry</span>
+              </button>
+            </div>
+          `;
+          const retryBtn = bubbleEl.querySelector('.btn-retry-stream');
+          if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+              this.regenerateLastResponse();
+            });
+          }
         }
-        window.showToast(err.message, 'error');
+        window.showToast(err.message || 'Generation failed', 'error');
       }
     });
   }
@@ -597,9 +611,23 @@ class ChatController {
       onError: (err) => {
         this.setStreamingState(false);
         if (bubbleEl) {
-          bubbleEl.innerHTML = `<div style="color:var(--color-danger);padding:8px 0;"><strong>Regenerate Error:</strong> ${this.escapeHtml(err.message)}</div>`;
+          bubbleEl.innerHTML = `
+            <div class="chat-stream-error" style="color:var(--color-danger);padding:8px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <span><strong>Regenerate Error:</strong> ${this.escapeHtml(err.message || 'Regeneration failed')}</span>
+              <button class="btn btn-secondary btn-sm btn-retry-regen" style="display:inline-flex;align-items:center;gap:6px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
+                <span>Retry</span>
+              </button>
+            </div>
+          `;
+          const retryBtn = bubbleEl.querySelector('.btn-retry-regen');
+          if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+              this.regenerateLastResponse();
+            });
+          }
         }
-        window.showToast(err.message, 'error');
+        window.showToast(err.message || 'Regeneration failed', 'error');
       }
     });
   }
@@ -796,17 +824,19 @@ class ChatController {
       try {
         let parsed = marked.parse(text || '');
         // Enhance code blocks with custom header and copy button
-        parsed = parsed.replace(/<pre><code class="language-([^"]+)">([\s\S]*?)<\/code><\/pre>/gi, (match, lang, code) => {
+        parsed = parsed.replace(/<pre><code(?:\s+class="(?:language-)?([^"]*)")?>([\s\S]*?)<\/code><\/pre>/gi, (match, lang, code) => {
+          const displayLang = (lang && lang.trim() ? lang.replace('language-', '').trim() : 'CODE').toUpperCase();
+          const langClass = lang && lang.trim() ? `language-${lang.replace('language-', '').trim()}` : '';
           return `
             <div class="code-block-wrapper">
               <div class="code-block-header">
-                <span>${lang.toUpperCase()}</span>
-                <button class="code-copy-btn" data-code="${this.escapeAttribute(code)}">
+                <span>${displayLang}</span>
+                <button class="code-copy-btn">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                   <span>Copy Code</span>
                 </button>
               </div>
-              <pre><code class="hljs language-${lang}">${code}</code></pre>
+              <pre><code class="hljs ${langClass}">${code}</code></pre>
             </div>
           `;
         });

@@ -89,6 +89,56 @@ async def run_phase5_tests():
     print("[1] TESTING IMAGE GENERATION (Prompts, Styles, Models, Aspect Ratios)")
     print("-"*70)
 
+    # 1.0 Verify Provider Key Enforcement (Reject when OPENAI_API_KEY is not set)
+    initial_openai_key = os.environ.get("OPENAI_API_KEY")
+    if "OPENAI_API_KEY" in os.environ:
+        del os.environ["OPENAI_API_KEY"]
+
+    try:
+        from fastapi import HTTPException
+        await image_gen_service.generate_image(user1_id, ImageGenRequest(prompt="Test enforcement prompt"))
+        assert False, "Should raise 400 when OPENAI_API_KEY is missing"
+    except HTTPException as e:
+        assert e.status_code == 400
+        assert "OPENAI_API_KEY" in e.detail
+        print(f"    [PASS] Verified real provider enforcement: {e.detail}")
+
+    # Restore or configure key and mock for end-to-end pipeline verification
+    import httpx
+    real_post = httpx.AsyncClient.post
+    mocked_dalle = False
+
+    if not initial_openai_key:
+        os.environ["OPENAI_API_KEY"] = "sk-test-live-key"
+        mocked_dalle = True
+
+        from PIL import Image
+        async def mock_post(self, url, *args, **kwargs):
+            if "openai.com" in str(url):
+                # Return b64_json of a valid PNG
+                json_data = kwargs.get("json", {})
+                size_str = json_data.get("size", "1024x1024")
+                try:
+                    w, h = map(int, size_str.split("x"))
+                except Exception:
+                    w, h = 1024, 1024
+                buf = io.BytesIO()
+                test_img = Image.new("RGB", (w, h), color=(20, 25, 40))
+                test_img.save(buf, format="PNG")
+                raw_png = buf.getvalue()
+                b64_str = base64.b64encode(raw_png).decode("utf-8")
+
+                class MockResponse:
+                    status_code = 200
+                    def json(self):
+                        return {"data": [{"b64_json": b64_str}]}
+                return MockResponse()
+            return await real_post(self, url, *args, **kwargs)
+
+        httpx.AsyncClient.post = mock_post
+    else:
+        os.environ["OPENAI_API_KEY"] = initial_openai_key
+
     # 1.1 Standard Image Generation
     prompt1 = "A futuristic glass laboratory in the Alps at sunset, ultra-detailed, cinematic lighting"
     print(f"\n[1.1] Generating image with style 'photorealistic' and aspect '16:9'...")
@@ -225,6 +275,13 @@ async def run_phase5_tests():
     except Exception:
         pass
     print(f"    [PASS] Image {temp_id} and disk file successfully deleted by owner.")
+
+    if mocked_dalle:
+        httpx.AsyncClient.post = real_post
+        if initial_openai_key:
+            os.environ["OPENAI_API_KEY"] = initial_openai_key
+        elif "OPENAI_API_KEY" in os.environ:
+            del os.environ["OPENAI_API_KEY"]
 
     # =========================================================================
     # 3. VOICE & SPEECH INTELLIGENCE TESTS

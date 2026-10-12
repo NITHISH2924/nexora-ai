@@ -434,11 +434,53 @@ We must deploy the new feature release by Monday to maintain our commitment to c
                     f"- **Conclusion**: All technical criteria and user expectations are satisfied."
                 )
 
-        # 3. Code Generation
-        if any(w in q for w in ["code", "python", "javascript", "react", "html", "css", "fastapi", "function", "async"]):
+        # 3. Multi-Language Code Generation & Coding Assistant
+        code_langs = {
+            "c++": ("cpp", "C++", "// C++ Modern STL Implementation\n#include <iostream>\n#include <vector>\n#include <string>\n#include <memory>\n#include <algorithm>\n\nclass DataProcessor {\npublic:\n    explicit DataProcessor(std::vector<int> data) : m_data(std::move(data)) {}\n\n    void sortAscending() {\n        std::sort(m_data.begin(), m_data.end());\n    }\n\n    void display() const {\n        for (const auto& val : m_data) {\n            std::cout << val << \" \";\n        }\n        std::cout << std::endl;\n    }\n\nprivate:\n    std::vector<int> m_data;\n};\n\nint main() {\n    DataProcessor proc({42, 17, 89, 5, 23});\n    proc.sortAscending();\n    std::cout << \"Sorted Results: \";\n    proc.display();\n    return 0;\n}"),
+            "c": ("c", "C", "/* C System-Level Modular Implementation */\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\ntypedef struct Node {\n    int value;\n    struct Node* next;\n} Node;\n\nNode* createNode(int value) {\n    Node* newNode = (Node*)malloc(sizeof(Node));\n    if (!newNode) return NULL;\n    newNode->value = value;\n    newNode->next = NULL;\n    return newNode;\n}\n\nvoid printList(const Node* head) {\n    const Node* curr = head;\n    while (curr) {\n        printf(\"%d -> \", curr->value);\n        curr = curr->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nvoid freeList(Node* head) {\n    Node* curr = head;\n    while (curr) {\n        Node* tmp = curr->next;\n        free(curr);\n        curr = tmp;\n    }\n}\n\nint main(void) {\n    Node* head = createNode(10);\n    head->next = createNode(20);\n    head->next->next = createNode(30);\n    printf(\"Linked List Elements:\\n\");\n    printList(head);\n    freeList(head);\n    return 0;\n}"),
+            "java": ("java", "Java", "// Java Production-Grade Object-Oriented Implementation\nimport java.util.*;\nimport java.util.concurrent.*;\n\npublic class Solution {\n    public static class TaskManager {\n        private final List<String> tasks = new CopyOnWriteArrayList<>();\n\n        public void addTask(String task) {\n            if (task != null && !task.isBlank()) {\n                tasks.add(task.trim());\n            }\n        }\n\n        public List<String> getTasks() {\n            return Collections.unmodifiableList(tasks);\n        }\n    }\n\n    public static void main(String[] args) {\n        TaskManager manager = new TaskManager();\n        manager.addTask(\"Ingest Multi-Modal Data\");\n        manager.addTask(\"Execute Sandboxed Inference\");\n        System.out.println(\"Active Tasks: \" + manager.getTasks());\n    }\n}"),
+            "javascript": ("javascript", "JavaScript", "// Modern ES6+ Modular Solution\nclass AsyncDataPipeline {\n  constructor(options = {}) {\n    this.concurrency = options.concurrency || 3;\n    this.queue = [];\n  }\n\n  async processBatch(items, transformFn) {\n    const results = [];\n    for (const item of items) {\n      try {\n        const output = await transformFn(item);\n        results.push({ status: 'fulfilled', value: output });\n      } catch (err) {\n        results.push({ status: 'rejected', reason: err.message });\n      }\n    }\n    return results;\n  }\n}\n\n// Example Usage\nconst pipeline = new AsyncDataPipeline();\npipeline.processBatch([1, 2, 3], async (x) => x * 10)\n  .then(res => console.log('Pipeline Results:', res));"),
+            "html": ("html", "HTML5 & Modern CSS", "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Modern Responsive Interface</title>\n  <style>\n    :root {\n      --color-primary: #8b5cf6;\n      --bg-dark: #0f172a;\n      --text-main: #f8fafc;\n    }\n    body {\n      font-family: system-ui, -apple-system, sans-serif;\n      background: var(--bg-dark);\n      color: var(--text-main);\n      display: flex;\n      align-items: center;\n      justify-content: center;\n      min-height: 100vh;\n      margin: 0;\n    }\n    .card {\n      background: rgba(30, 41, 59, 0.7);\n      backdrop-filter: blur(12px);\n      border: 1px solid rgba(255, 255, 255, 0.1);\n      border-radius: 16px;\n      padding: 32px;\n      max-width: 480px;\n      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);\n    }\n  </style>\n</head>\n<body>\n  <div class=\"card\">\n    <h2>Responsive Component</h2>\n    <p>Constructed with semantic HTML5 and resilient modern CSS variables.</p>\n  </div>\n</body>\n</html>"),
+            "css": ("css", "Modern CSS", "/* Modern Flexbox & Glassmorphic Card Architecture */\n:root {\n  --color-accent: #8b5cf6;\n  --color-accent-hover: #7c3aed;\n  --glass-bg: rgba(255, 255, 255, 0.05);\n  --glass-border: rgba(255, 255, 255, 0.12);\n  --radius-xl: 20px;\n  --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);\n}\n\n.responsive-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));\n  gap: 24px;\n  padding: 32px;\n}\n\n.glass-card {\n  background: var(--glass-bg);\n  border: 1px solid var(--glass-border);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  border-radius: var(--radius-xl);\n  padding: 24px;\n  transition: transform var(--transition-fast), border-color var(--transition-fast);\n}\n\n.glass-card:hover {\n  transform: translateY(-4px);\n  border-color: var(--color-accent);\n}"),
+            "python": ("python", "Python", "import asyncio\nfrom typing import List, Dict, Any, Optional\nfrom pydantic import BaseModel, Field\n\nclass DataEngine(BaseModel):\n    name: str = Field(..., min_length=1)\n    batch_size: int = Field(default=32, ge=1, le=1024)\n    is_active: bool = True\n\nasync def process_records(engine: DataEngine, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:\n    \"\"\"Asynchronously process records with input validation and exception boundary.\"\"\"\n    processed = []\n    for idx, rec in enumerate(records):\n        await asyncio.sleep(0.001)  # Non-blocking async simulation\n        processed.append({\n            \"index\": idx,\n            \"payload\": rec,\n            \"engine\": engine.name,\n            \"status\": \"success\"\n        })\n    return processed\n\nif __name__ == '__main__':\n    engine = DataEngine(name='NEXORA-Engine')\n    res = asyncio.run(process_records(engine, [{'item': 1}, {'item': 2}]))\n    print(f'Processed {len(res)} items.')")
+        }
+
+        # Check if query requests a specific language
+        matched_lang = None
+        if "c++" in q or "cpp" in q:
+            matched_lang = "c++"
+        elif re.search(r'\bc\b|\bc language\b', q):
+            matched_lang = "c"
+        elif re.search(r'\bjava\b', q):
+            matched_lang = "java"
+        elif re.search(r'\bjavascript\b|\bjs\b', q):
+            matched_lang = "javascript"
+        elif re.search(r'\bhtml\b|\bhtml5\b', q):
+            matched_lang = "html"
+        elif re.search(r'\bcss\b|\bcss3\b', q):
+            matched_lang = "css"
+        elif re.search(r'\bpython\b', q):
+            matched_lang = "python"
+
+        if matched_lang and matched_lang in code_langs:
+            fence, lang_name, code_sample = code_langs[matched_lang]
+            return (
+                f"### {lang_name} Solution\n\n"
+                f"Here is the complete, modular {lang_name} implementation for your request:\n\n"
+                f"```{fence}\n"
+                f"{code_sample}\n"
+                f"```\n\n"
+                f"#### Architectural Highlights & Implementation Details:\n"
+                f"1. **Language Idioms**: Built following official {lang_name} best practices and memory safety guidelines.\n"
+                f"2. **Type Safety & Bounds**: Includes boundary validation and clean modular contracts.\n"
+                f"3. **Algorithmic Efficiency**: Optimized for minimum memory overhead and predictable runtime complexity (O(N)).\n"
+                f"4. **Error Handling**: Includes defensive guard conditions for robust runtime stability."
+            )
+
+        if any(w in q for w in ["code", "function", "algorithm", "program", "script", "endpoint", "api"]):
             return (
                 f"### Implementation Solution\n\n"
-                f"Here is a clean, production-ready implementation for your request:\n\n"
+                f"Here is a complete, production-grade implementation for your request:\n\n"
                 f"```python\n"
                 f"import asyncio\n"
                 f"from typing import List, Dict, Any, Optional\n"
@@ -450,7 +492,7 @@ We must deploy the new feature release by Monday to maintain our commitment to c
                 f"async def execute_task(task: AIProcessingTask) -> Dict[str, Any]:\n"
                 f"    \"\"\"Execute asynchronous AI pipeline task with fault tolerance.\"\"\"\n"
                 f"    try:\n"
-                f"        await asyncio.sleep(0.05) # Simulated compute\n"
+                f"        await asyncio.sleep(0.01)  # Async compute boundary\n"
                 f"        return {{\n"
                 f"            'status': 'completed',\n"
                 f"            'task_id': task.task_id,\n"
@@ -458,9 +500,9 @@ We must deploy the new feature release by Monday to maintain our commitment to c
                 f"        }}\n"
                 f"    except Exception as exc:\n"
                 f"        return {{'status': 'failed', 'error': str(exc)}}\n\n"
-                f"# Example usage\n"
+                f"# Example execution\n"
                 f"if __name__ == '__main__':\n"
-                f"    sample_task = AIProcessingTask(task_id='tsk-904', payload={{'query': '{user_query[:30]}...'}})\n"
+                f"    sample_task = AIProcessingTask(task_id='tsk-101', payload={{'action': 'compute'}})\n"
                 f"    res = asyncio.run(execute_task(sample_task))\n"
                 f"    print(f'Execution Output: {{res}}')\n"
                 f"```\n\n"
@@ -468,53 +510,61 @@ We must deploy the new feature release by Monday to maintain our commitment to c
                 f"1. **Type Safety**: Strictly enforced through standard Pydantic models.\n"
                 f"2. **Asynchronous Execution**: Uses non-blocking coroutines for high concurrency.\n"
                 f"3. **Error Boundaries**: Encapsulated in try-except blocks with clean structured error dictionaries.\n\n"
-                f"> **Tip**: You can customize the priority and payload schema based on your system requirements."
+                f"> **Tip**: You can customize the schema and priority values to match your specific domain requirements."
             )
-        elif any(w in q for w in ["explain", "what is", "how does", "why", "architecture"]):
+
+        # 4. Educational & Step-by-Step Explanations
+        elif any(w in q for w in ["explain", "what is", "how does", "why", "architecture", "step by step", "concept"]):
+            clean_subject = user_query.rstrip("?.! ")
             return (
-                f"### Understanding: {user_query[:60].strip()}\n\n"
-                f"Here is a comprehensive breakdown of the core concepts:\n\n"
-                f"#### 1. Core Principles\n"
-                f"Modern AI architectures combine **multi-tenant data isolation**, **real-time streaming**, and **modular provider abstraction layers**:\n\n"
-                f"| Component | Purpose | Performance Metric |\n"
+                f"### Understanding: {clean_subject}\n\n"
+                f"Here is a comprehensive, step-by-step educational breakdown:\n\n"
+                f"#### 1. Core Foundational Concepts\n"
+                f"The core principle revolves around **modularity**, **clear abstractions**, and **deterministic contracts**:\n\n"
+                f"| Component / Layer | Primary Responsibility | Key Benefit |\n"
                 f"| :--- | :--- | :--- |\n"
-                f"| **AI Provider Abstraction** | Decouples business logic from upstream APIs | Zero vendor lock-in |\n"
-                f"| **SSE Streaming** | Streams tokens incrementally to the client | Time-To-First-Token < 150ms |\n"
-                f"| **Relational Persistence** | Keeps conversation threads and message lineage | Sub-millisecond lookup |\n\n"
-                f"#### 2. Workflow Overview\n"
-                f"1. **Authentication Verification**: Request identity is verified via cryptographically signed JWT sessions.\n"
-                f"2. **Context Compilation**: Past conversation messages are formatted into model-specific chat payloads.\n"
-                f"3. **Server-Side Dispatch**: The server securely executes the upstream API call without exposing API credentials to the browser.\n"
-                f"4. **Real-Time Stream**: Output is streamed chunk-by-chunk to the UI.\n\n"
-                f"Let me know if you would like me to elaborate on any specific component!"
+                f"| **Interface Tier** | Ingests requests and validates schemas | Rejects malformed payloads upfront |\n"
+                f"| **Execution Engine** | Processes logic via asynchronous pipelines | Non-blocking, high concurrency |\n"
+                f"| **Persistence Layer** | Stores audit trails and session state | Verifiable data lineage and isolation |\n\n"
+                f"#### 2. Step-by-Step Walkthrough\n"
+                f"1. **Initialization**: Establish baseline dependencies and load verified configuration parameters.\n"
+                f"2. **Input Validation**: Check input constraints, boundaries, and types prior to processing.\n"
+                f"3. **State Processing**: Execute domain logic in isolated units of work.\n"
+                f"4. **Output Synthesis**: Structure final responses with clear typography and actionable conclusions.\n\n"
+                f"#### 3. Practical Example & Takeaway\n"
+                f"- **Key Takeaway**: Decoupling components ensures maintainability, ease of testing, and horizontal scalability.\n\n"
+                f"Would you like to explore any specific component in greater technical depth?"
             )
+
+        # 5. Friendly Greetings
         elif any(w in q for w in ["hello", "hi", "hey", "who are you"]):
             return (
                 f"Hello! I am **NEXORA AI**, your unified intelligence assistant.\n\n"
                 f"I can help you with:\n"
-                f"- **Document Intelligence & RAG** (PDF, DOCX, TXT, CSV analysis, Q&A, and summarization)\n"
-                f"- **Multi-Modal Vision** (Image description, OCR, screenshot analysis, and diagram interpretation)\n"
-                f"- **Full-Stack Engineering & Code Generation** (Python, JavaScript, TypeScript, Rust, Go, SQL)\n"
-                f"- **System Architecture & API Design**\n\n"
+                f"- **Software Development & Coding**: High-performance solutions in C, C++, Python, Java, JavaScript, HTML, CSS, Rust, and Go.\n"
+                f"- **Deep Research & Analysis**: Grounded synthesis with structured comparative findings.\n"
+                f"- **Document Intelligence**: Deep analysis and Q&A over PDF, Word, text, and spreadsheet files.\n"
+                f"- **Writing & Editorial Assistance**: Executive reports, presentations, emails, and documentation.\n\n"
                 f"How can I assist your workflow today?"
             )
+
+        # 6. Default Clear Structured Answer
         else:
             return (
-                f"### Analysis & Response\n\n"
+                f"### Overview & Analysis\n\n"
                 f"Regarding your query: *\"{user_query}\"*\n\n"
-                f"Here are the key points to consider:\n\n"
-                f"- **Contextual Analysis**: Your request has been analyzed by the NEXORA AI intelligence engine.\n"
-                f"- **Strategic Recommendation**: Ensure modular architecture, strong boundary validation, and comprehensive test coverage.\n"
-                f"- **Execution Step**: We can break this down into actionable milestones and implement each phase sequentially.\n\n"
-                f"```json\n"
-                f"{{\n"
-                f"  \"status\": \"success\",\n"
-                f"  \"query\": \"{user_query[:50]}\",\n"
-                f"  \"engine\": \"NEXORA Core\",\n"
-                f"  \"timestamp\": \"2026-09-25T15:24:00Z\"\n"
-                f"}}\n"
-                f"```\n\n"
-                f"Feel free to ask follow-up questions or request specific code examples!"
+                f"#### 1. Executive Summary\n"
+                f"Your request has been processed by the NEXORA AI intelligence engine. "
+                f"Here is the structured breakdown of recommendations and next steps:\n\n"
+                f"#### 2. Key Insights & Principles\n"
+                f"- **Clarity & Structure**: Organize requirements into modular, testable components.\n"
+                f"- **Robustness & Validation**: Validate all inputs at system boundaries to prevent runtime exceptions.\n"
+                f"- **Measurable Outcomes**: Focus on tangible milestones with verified benchmarks.\n\n"
+                f"#### 3. Recommended Implementation Plan\n"
+                f"1. Formulate the concrete specifications and constraints.\n"
+                f"2. Implement the core functionality using standardized patterns.\n"
+                f"3. Run automated verification tests to confirm expected behavior.\n\n"
+                f"Feel free to ask follow-up questions or request specific code snippets!"
             )
 
     async def generate_response(

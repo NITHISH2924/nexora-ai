@@ -166,45 +166,62 @@ class ImageGenerationService:
         image_bytes: Optional[bytes] = None
         model_used = req.model or "dall-e-3"
 
-        # 1. Check for OpenAI DALL-E Provider
+        # 1. Check for real Image Generation Provider (OpenAI DALL-E)
         openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if openai_key and model_used.startswith("dall-e"):
-            try:
-                enhanced_prompt = f"{prompt}, style: {style}, high resolution, 8k, photorealistic"
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    res = await client.post(
-                        "https://api.openai.com/v1/images/generations",
-                        headers={
-                            "Authorization": f"Bearer {openai_key}",
-                            "Content-Type": "application/json"
-                        },
-                        json={
-                            "model": "dall-e-3" if "3" in model_used else "dall-e-2",
-                            "prompt": enhanced_prompt[:1000],
-                            "n": 1,
-                            "size": f"{width}x{height}" if width == height else "1024x1024",
-                            "response_format": "b64_json"
-                        }
-                    )
-                    if res.status_code == 200:
-                        data = res.json()
-                        b64_data = data["data"][0]["b64_json"]
-                        image_bytes = base64.b64decode(b64_data)
-                        model_used = "dall-e-3"
-                    else:
-                        logger.warning(f"OpenAI DALL-E returned {res.status_code}: {res.text}")
-            except Exception as err:
-                logger.warning(f"External image generation failed, falling back to built-in generator: {err}")
-
-        # 2. Local High-Fidelity Artistic Rendering Fallback
-        if not image_bytes:
-            image_bytes = self._render_artistic_image(
-                prompt=prompt,
-                style=style,
-                width=width,
-                height=height
+        if not openai_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="AI Image Generation requires a configured image generation provider. Please configure OPENAI_API_KEY in your environment to enable real DALL-E image generation."
             )
-            model_used = f"nexora-gen-art-{style}"
+
+        try:
+            enhanced_prompt = f"{prompt}, style: {style}, high resolution, 8k, photorealistic"
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                res = await client.post(
+                    "https://api.openai.com/v1/images/generations",
+                    headers={
+                        "Authorization": f"Bearer {openai_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "dall-e-3" if "3" in model_used else "dall-e-2",
+                        "prompt": enhanced_prompt[:1000],
+                        "n": 1,
+                        "size": f"{width}x{height}" if width == height else "1024x1024",
+                        "response_format": "b64_json"
+                    }
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    b64_data = data["data"][0]["b64_json"]
+                    image_bytes = base64.b64decode(b64_data)
+                    model_used = "dall-e-3" if "3" in model_used else "dall-e-2"
+                else:
+                    err_detail = "Upstream image generation provider failed"
+                    try:
+                        err_json = res.json()
+                        err_detail = err_json.get("error", {}).get("message", res.text[:200])
+                    except Exception:
+                        pass
+                    logger.error(f"OpenAI DALL-E error {res.status_code}: {err_detail}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Image generation failed from upstream provider: {err_detail}"
+                    )
+        except HTTPException:
+            raise
+        except Exception as err:
+            logger.error(f"Image generation connection error: {err}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to connect to image generation provider: {str(err)}"
+            )
+
+        if not image_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Image generation produced no image data."
+            )
 
         # 3. Save Image File to Disk in User's Directory
         user_dir = self._get_user_gen_dir(user_id)

@@ -237,18 +237,35 @@ async def run_production_hardening_tests():
     # =========================================================================
     print("\n[6] Testing Image Generation & Binary Asset Management...")
 
-    img_res = await image_gen_service.generate_image(
-        u1_id,
-        ImageGenRequest(
-            prompt="Futuristic crystalline observatory in the Swiss Alps at dusk, ultra-detailed",
-            aspectRatio="16:9",
-            style="photorealistic"
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if openai_key:
+        img_res = await image_gen_service.generate_image(
+            u1_id,
+            ImageGenRequest(
+                prompt="Futuristic crystalline observatory in the Swiss Alps at dusk, ultra-detailed",
+                aspectRatio="16:9",
+                style="photorealistic"
+            )
         )
-    )
-    img_id = img_res.id
-    assert img_res.width == 1024 and img_res.height == 576
-    assert Path(img_res.imagePath).exists()
-    print(f"    [PASS] Image synthesized: {img_id} (1024x576, {img_res.fileSize} bytes).")
+        img_id = img_res.id
+        assert img_res.width == 1024 and img_res.height == 576
+        assert Path(img_res.imagePath).exists()
+        print(f"    [PASS] Image synthesized with DALL-E: {img_id} (1024x576, {img_res.fileSize} bytes).")
+    else:
+        try:
+            await image_gen_service.generate_image(
+                u1_id,
+                ImageGenRequest(
+                    prompt="Futuristic crystalline observatory in the Swiss Alps at dusk, ultra-detailed",
+                    aspectRatio="16:9",
+                    style="photorealistic"
+                )
+            )
+            assert False, "Should raise 400 when OPENAI_API_KEY is not configured"
+        except HTTPException as e:
+            assert e.status_code == 400
+            assert "OPENAI_API_KEY" in e.detail
+            print(f"    [PASS] Verified real provider enforcement (no mock images): {e.detail}")
 
     # =========================================================================
     # STEP 7: VOICE INTELLIGENCE (STT & TTS SYNTHESIS)
@@ -387,12 +404,13 @@ async def run_production_hardening_tests():
         print("    [PASS] Cross-user file metadata access blocked (404).")
 
     # 3. User 2 cannot access User 1 generated image
-    try:
-        await image_gen_service.get_image(u2_id, img_id)
-        assert False, "User 2 accessed User 1 image!"
-    except HTTPException as e:
-        assert e.status_code == 404
-        print("    [PASS] Cross-user image access blocked (404).")
+    if openai_key and 'img_id' in locals():
+        try:
+            await image_gen_service.get_image(u2_id, img_id)
+            assert False, "User 2 accessed User 1 image!"
+        except HTTPException as e:
+            assert e.status_code == 404
+            print("    [PASS] Cross-user image access blocked (404).")
 
     # 4. User 2 cannot access User 1 project
     try:
@@ -428,7 +446,8 @@ async def run_production_hardening_tests():
     # Delete project
     await project_service.delete_project(u1_id, proj_id)
     # Delete image
-    await image_gen_service.delete_image(u1_id, img_id)
+    if openai_key and 'img_id' in locals():
+        await image_gen_service.delete_image(u1_id, img_id)
     # Delete file
     await file_service.delete_file(u1_id, doc_id)
     # Delete chat

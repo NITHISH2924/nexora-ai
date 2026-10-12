@@ -61,6 +61,10 @@ CAMEL_KEY_MAP = {
     "isactive": "isActive",
     "ipaddress": "ipAddress",
     "useragent": "userAgent",
+    "messagecount": "messageCount",
+    "lastmessage": "lastMessage",
+    "fileids": "fileIds",
+    "model": "model",
 }
 
 class CaseInsensitiveRow(dict):

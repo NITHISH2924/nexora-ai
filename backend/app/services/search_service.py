@@ -89,80 +89,12 @@ class SearchService:
         except Exception as e:
             logger.warning(f"DuckDuckGo search error: {e}")
 
-        # 3. If live network is constrained, fallback to curated contextual search index
-        if not sources:
-            sources = self._get_fallback_web_sources(query, max_results)
-
+        # 3. If live network returned no results, do not fabricate fake sources or citations
         return sources[:max_results]
 
     def _get_fallback_web_sources(self, query: str, max_results: int) -> List[SearchResultSource]:
-        """Provides legitimate, domain-accurate sources when external network requests are restricted."""
-        q = query.lower()
-        
-        if any(w in q for w in ["python", "fastapi", "asyncio", "pydantic"]):
-            return [
-                SearchResultSource(
-                    title="FastAPI Official Documentation — Asynchronous Web Framework",
-                    url="https://fastapi.tiangolo.com/tutorial/bigger-applications/",
-                    snippet="FastAPI is a modern, high-performance web framework for building APIs with Python 3.8+ based on standard Python type hints.",
-                    domain="fastapi.tiangolo.com"
-                ),
-                SearchResultSource(
-                    title="Python Asyncio Documentation — Concurrency & Event Loops",
-                    url="https://docs.python.org/3/library/asyncio.html",
-                    snippet="asyncio is a library to write concurrent code using the async/await syntax. It provides event loops, coroutines, and asynchronous tasks.",
-                    domain="docs.python.org"
-                ),
-                SearchResultSource(
-                    title="Pydantic V2 Migration Guide & Performance Benchmarks",
-                    url="https://docs.pydantic.dev/latest/migration/",
-                    snippet="Pydantic V2 is written in Rust, offering up to 20x performance speedup in schema validation and serialization.",
-                    domain="docs.pydantic.dev"
-                )
-            ][:max_results]
-        elif any(w in q for w in ["rag", "llm", "embedding", "vector", "ai", "model"]):
-            return [
-                SearchResultSource(
-                    title="Retrieval-Augmented Generation (RAG) Architecture Overview",
-                    url="https://arxiv.org/abs/2005.11401",
-                    snippet="RAG models combine pre-trained parametric memory with non-parametric retrieval memory over dense vector representations.",
-                    domain="arxiv.org"
-                ),
-                SearchResultSource(
-                    title="Google Gemini API Developer Guide & Multimodal Capabilities",
-                    url="https://ai.google.dev/docs/gemini_api_overview",
-                    snippet="Gemini 1.5 Flash and Pro provide multi-million token context windows and multimodal video, audio, image, and text understanding.",
-                    domain="ai.google.dev"
-                ),
-                SearchResultSource(
-                    title="OpenAI API Documentation — Chat Completions & Function Calling",
-                    url="https://platform.openai.com/docs/guides/chat-completions",
-                    snippet="GPT-4o delivers flagship intelligence with real-time text and vision reasoning at lower latency and cost.",
-                    domain="platform.openai.com"
-                )
-            ][:max_results]
-        else:
-            domain_slug = re.sub(r'[^a-zA-Z0-9]', '', q)[:12] or "general"
-            return [
-                SearchResultSource(
-                    title=f"Comprehensive Overview & Insights: {query[:45]}",
-                    url=f"https://en.wikipedia.org/wiki/{urllib.parse.quote(query[:30])}",
-                    snippet=f"Authoritative knowledge base entry detailing historical context, structural components, and modern applications regarding {query[:50]}.",
-                    domain="wikipedia.org"
-                ),
-                SearchResultSource(
-                    title=f"Technical Reference & Specifications — {query[:45]}",
-                    url=f"https://developer.mozilla.org/en-US/search?q={urllib.parse.quote(query[:30])}",
-                    snippet=f"In-depth technical analysis, operational principles, standard practices, and verified documentation on {query[:50]}.",
-                    domain="developer.mozilla.org"
-                ),
-                SearchResultSource(
-                    title=f"Research & Analytical Synthesis — {query[:45]}",
-                    url=f"https://github.com/topics/{domain_slug}",
-                    snippet=f"Curated open source repositories, architecture blueprints, and benchmarks relevant to {query[:50]}.",
-                    domain="github.com"
-                )
-            ][:max_results]
+        """Returns empty list when external network search is unavailable (never fabricates URLs)."""
+        return []
 
     async def search_and_synthesize(
         self,

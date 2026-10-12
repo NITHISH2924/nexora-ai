@@ -114,12 +114,37 @@ async def send_message(
         model=req.model or conv["model"]
     )
 
-    # 3. Compile full message context
+    # 3. Prepare full conversation history with optional file context
     conv_updated = await chat_service.get_conversation(user_id, conversation_id)
     messages_payload = [{"role": m["role"], "content": m["content"]} for m in conv_updated["messages"]]
 
+    images_payload = []
+    if req.fileIds:
+        from backend.app.services.file_service import file_service
+        file_attachments_text = []
+        for fid in req.fileIds:
+            try:
+                fdata = await file_service.get_file(user_id, fid)
+                if fdata["fileType"] == "image":
+                    import base64
+                    disk_p = await file_service.get_file_disk_path(user_id, fid)
+                    with open(disk_p, "rb") as im_f:
+                        im_b64 = base64.b64encode(im_f.read()).decode("utf-8")
+                    images_payload.append({
+                        "mime_type": fdata["mimeType"],
+                        "data": im_b64,
+                        "filename": fdata["originalFilename"]
+                    })
+                elif fdata.get("extractedText"):
+                    file_attachments_text.append(f"=== ATTACHED FILE: {fdata['originalFilename']} ===\n{fdata['extractedText'][:15000]}\n=== END FILE ===")
+            except Exception as e:
+                logger.warning(f"Could not load attached file {fid}: {e}")
+
+        if file_attachments_text and messages_payload:
+            messages_payload[-1]["content"] += "\n\n" + "\n\n".join(file_attachments_text)
+
     # 4. Generate AI response
-    model_to_use = req.model or conv["model"]
+    model_to_use = req.model or conv.get("model") or "gemini-1.5-flash"
     system_prompt = req.systemPrompt or conv.get("systemPrompt")
     
     # Inject user personalization & active memories
@@ -134,7 +159,8 @@ async def send_message(
     ai_text, actual_model = await ai_manager.generate_response(
         messages=messages_payload,
         model=model_to_use,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        images=images_payload
     )
 
     # 5. Save assistant message

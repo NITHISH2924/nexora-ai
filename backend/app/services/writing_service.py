@@ -107,6 +107,35 @@ class WritingService:
                 f"1. **Accurate Translation**: Natural, high-fluency translation in {target_lang}.\n"
                 f"2. **Pronunciation / Transliteration** (if applicable).\n"
                 f"3. **Contextual & Cultural Notes**."
+            ),
+            "report": (
+                f"You are a senior analyst and technical writer. Draft an executive, publication-grade report on:\n"
+                f"Topic / Notes: \"{text_input or 'Comprehensive Platform Architecture and Performance Review'}\"\n"
+                f"Tone: {tone.capitalize()}\n\n"
+                f"Format as a complete structured report with:\n"
+                f"1. **Executive Summary**\n"
+                f"2. **Background & Objectives**\n"
+                f"3. **Key Findings & Analysis** (with bullet points and metrics table where appropriate)\n"
+                f"4. **Strategic Recommendations & Next Steps**"
+            ),
+            "presentation": (
+                f"You are an executive pitch and slide deck designer. Create a high-impact presentation outline on:\n"
+                f"Topic: \"{text_input or 'AI Platform Strategy and Roadmap'}\"\n"
+                f"Tone: {tone.capitalize()}\n\n"
+                f"Format as slide-by-slide structure:\n"
+                f"- Slide Title\n"
+                f"- Core Message & Talking Points (3-4 concise bullets)\n"
+                f"- Visual / Chart Recommendation"
+            ),
+            "documentation": (
+                f"You are a staff software engineer and documentation architect. Create clear, comprehensive project documentation for:\n"
+                f"Details: \"{text_input or 'REST API and Architecture Specifications'}\"\n\n"
+                f"Structure as:\n"
+                f"1. **System Overview & Purpose**\n"
+                f"2. **Architecture & Component Design**\n"
+                f"3. **API & Interface Signatures**\n"
+                f"4. **Configuration & Deployment Guide**\n"
+                f"5. **Security & Performance Considerations**"
             )
         }
 

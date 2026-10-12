@@ -126,34 +126,34 @@ class MessageItem(BaseModel):
     userId: str
     role: str
     content: str
-    model: Optional[str] = None
-    tokens: int = 0
+    model: Optional[str] = "gemini-1.5-flash"
+    tokens: Optional[int] = 0
     fileIds: Optional[List[str]] = None
     createdAt: str
 
 class ConversationSummary(BaseModel):
     id: str
     userId: str
-    title: str
-    model: str
+    title: Optional[str] = "New Chat"
+    model: Optional[str] = "gemini-1.5-flash"
     systemPrompt: Optional[str] = None
     createdAt: str
     updatedAt: str
-    isPinned: bool
-    isArchived: bool
-    messageCount: int = 0
+    isPinned: Optional[bool] = False
+    isArchived: Optional[bool] = False
+    messageCount: Optional[int] = 0
     lastMessage: Optional[str] = None
 
 class ConversationDetail(BaseModel):
     id: str
     userId: str
-    title: str
-    model: str
+    title: Optional[str] = "New Chat"
+    model: Optional[str] = "gemini-1.5-flash"
     systemPrompt: Optional[str] = None
     createdAt: str
     updatedAt: str
-    isPinned: bool
-    isArchived: bool
+    isPinned: Optional[bool] = False
+    isArchived: Optional[bool] = False
     messages: List[MessageItem] = []
 
 # Phase 3: Files & Document Intelligence Models
@@ -272,7 +272,7 @@ class CodeExecutionResponse(BaseModel):
 
 # Phase 4: Writing Assistant Models
 class WritingAssistRequest(BaseModel):
-    action: str = Field(..., pattern=r"^(rewrite|grammar|summarize|expand|shorten|professional|email|resume|cover_letter|translate)$")
+    action: str = Field(..., pattern=r"^(rewrite|grammar|summarize|expand|shorten|professional|email|resume|cover_letter|translate|report|presentation|documentation)$")
     text: Optional[str] = ""
     tone: Optional[str] = "professional"
     targetLanguage: Optional[str] = "English"

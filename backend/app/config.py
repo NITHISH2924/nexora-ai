@@ -106,57 +106,51 @@ def is_leadership_query(text: str) -> bool:
     if not text or not isinstance(text, str):
         return False
     t = text.lower().strip()
+    # Normalize punctuation and extra spaces
+    normalized = re.sub(r'[^a-z0-9\s]', '', t).strip()
     
     # Direct exact/short question patterns
     exact_matches = {
-        "who is the owner", "who is the owner?",
-        "who is the ceo", "who is the ceo?",
-        "who is owner", "who is owner?",
-        "who is ceo", "who is ceo?",
-        "who owns nexora", "who owns nexora?",
-        "who owns nexora ai", "who owns nexora ai?",
-        "who is the ceo of nexora", "who is the ceo of nexora?",
-        "who is the ceo of nexora ai", "who is the ceo of nexora ai?",
-        "who is the owner of nexora", "who is the owner of nexora?",
-        "who is the owner of nexora ai", "who is the owner of nexora ai?",
-        "who created nexora", "who created nexora?",
-        "who created nexora ai", "who created nexora ai?",
-        "tell me about the leadership of nexora ai", "tell me about the leadership of nexora ai?",
-        "tell me about the leadership of nexora", "tell me about the leadership of nexora?",
-        "tell me about the leadership", "tell me about the leadership?",
-        "tell me about the ceo of nexora ai", "tell me about the ceo of nexora ai.",
-        "tell me about the owner of nexora ai", "tell me about the owner of nexora ai.",
-        "tell me about the ceo", "tell me about the ceo?",
-        "tell me about the owner", "tell me about the owner?",
-        "who are the owner and ceo", "who are the owner and ceo?",
-        "who is the owner and ceo", "who is the owner and ceo?",
-        "who is the owner and ceo of this app", "who is the owner and ceo of this app?",
-        "who is the owner of this app", "who is the owner of this app?",
-        "who is the ceo of this app", "who is the ceo of this app?",
-        "who is your owner", "who is your owner?",
-        "who is your ceo", "who is your ceo?",
-        "who is your creator", "who is your creator?",
-        "who is your founder", "who is your founder?",
-        "who owns this", "who owns this?",
-        "who owns this app", "who owns this app?",
-        "who created this", "who created this?",
-        "who founded this", "who founded this?",
-        "who made nexora", "who made nexora?",
-        "who made nexora ai", "who made nexora ai?",
-        "owner", "ceo", "leadership"
+        "who is the owner", "who is the ceo",
+        "who is owner", "who is ceo",
+        "who owns nexora", "who owns nexora ai",
+        "who is the ceo of nexora", "who is the ceo of nexora ai",
+        "who is the owner of nexora", "who is the owner of nexora ai",
+        "who created nexora", "who created nexora ai",
+        "tell me about the leadership of nexora ai", "tell me about the leadership of nexora",
+        "tell me about the leadership",
+        "tell me about the ceo of nexora ai", "tell me about the owner of nexora ai",
+        "tell me about the ceo", "tell me about the owner",
+        "who are the owner and ceo", "who is the owner and ceo",
+        "who is the owner and who is the ceo",
+        "who is the owner or ceo", "who is owner and ceo",
+        "who is the owner and ceo of this app",
+        "who is the owner of this app", "who is the ceo of this app",
+        "who is your owner", "who is your ceo",
+        "who is your creator", "who is your founder",
+        "who is your boss", "who is the boss",
+        "who owns this", "who owns this app",
+        "who created this", "who created this app",
+        "who founded this", "who founded this app",
+        "who made nexora", "who made nexora ai",
+        "who made this app", "who made this",
+        "owner", "ceo", "leadership", "founder", "creator"
     }
-    if t in exact_matches:
+    if normalized in exact_matches or t in exact_matches:
         return True
         
     regex_patterns = [
-        r"\b(who|tell me about|what is the name of|names? of|what are the names of)\b.*\b(owner|ceo|founder|creator|leadership|leaders|running|built|created|founded|owns)\b",
+        r"\b(who|tell me|what|names?)\b.*\b(owner|ceo|founder|creator|leadership|leaders|boss|running|built|created|founded|owns)\b",
         r"\b(who owns|who created|who founded|who made|who runs)\b",
-        r"\b(who (is|are) (the |your )?(owner|ceo|founder|creator|leadership|leaders))\b",
+        r"\b(who (is|are) (the |your )?(owner|ceo|founder|creator|leadership|leaders|boss))\b",
         r"\b(owner|ceo|founder|creator|leadership)\b.*\b(nexora|platform|app|company|system)\b",
-        r"\b(nexora|platform|app|company|system)\b.*\b(owner|ceo|founder|creator|leadership)\b"
+        r"\b(nexora|platform|app|company|system)\b.*\b(owner|ceo|founder|creator|leadership)\b",
+        r"\b(nexoras|nexora's)\s+(owner|ceo|founder|creator|leadership|boss)\b",
+        r"\b(owner|ceo)\b.*\b(nexoras|nexora's)\b",
+        r"\b(owner\s+(and|or|&)\s+ceo|ceo\s+(and|or|&)\s+owner)\b"
     ]
     for p in regex_patterns:
-        if re.search(p, t, re.IGNORECASE):
+        if re.search(p, t, re.IGNORECASE) or re.search(p, normalized, re.IGNORECASE):
             return True
     return False
 

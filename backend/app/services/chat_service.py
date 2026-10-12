@@ -12,15 +12,20 @@ logger = logging.getLogger("chat_service")
 
 def generate_title_from_prompt(prompt: str) -> str:
     """Generates a clean 3-7 word conversation title from user's first prompt."""
-    clean = prompt.strip().replace("\n", " ")
+    if not prompt or not isinstance(prompt, str):
+        return "New Chat"
+    clean = prompt.strip().replace("\r\n", " ").replace("\n", " ").replace("\t", " ")
+    # Strip markdown headers, backticks, or code indicators
+    clean = clean.lstrip("#*`_~> ").strip()
     words = clean.split()
+    if not words:
+        return "New Chat"
     if len(words) <= 6:
         title = " ".join(words)
     else:
         title = " ".join(words[:6]) + "..."
-    # Capitalize first letter and cap length
     if title:
-        title = title[0].toUpperCase() if hasattr(title[0], 'toUpperCase') else title[0].upper() + title[1:]
+        title = title[0].upper() + title[1:]
     return title[:60] if title else "New Chat"
 
 class ChatService:
@@ -94,19 +99,20 @@ class ChatService:
             
             rows = await cursor.fetchall()
             conversations = []
-            for r in rows:
+            for row in rows:
+                r = dict(row)
                 conversations.append({
-                    "id": r["id"],
-                    "userId": r["userId"],
-                    "title": r["title"],
-                    "model": r["model"],
-                    "systemPrompt": r["systemPrompt"],
-                    "createdAt": r["createdAt"],
-                    "updatedAt": r["updatedAt"],
-                    "isPinned": bool(r["isPinned"]),
-                    "isArchived": bool(r["isArchived"]),
-                    "messageCount": r["messageCount"],
-                    "lastMessage": r["lastMessage"]
+                    "id": str(r.get("id")),
+                    "userId": str(r.get("userId")),
+                    "title": r.get("title") or "New Chat",
+                    "model": r.get("model") or "gemini-1.5-flash",
+                    "systemPrompt": r.get("systemPrompt"),
+                    "createdAt": str(r.get("createdAt") or ""),
+                    "updatedAt": str(r.get("updatedAt") or ""),
+                    "isPinned": bool(r.get("isPinned") or False),
+                    "isArchived": bool(r.get("isArchived") or False),
+                    "messageCount": int(r.get("messageCount") or 0) if r.get("messageCount") is not None else 0,
+                    "lastMessage": r.get("lastMessage")
                 })
             return conversations
 
@@ -117,12 +123,13 @@ class ChatService:
             cursor = await db.execute("""
             SELECT * FROM conversations WHERE id = ? AND userId = ?
             """, (conversation_id, user_id))
-            conv = await cursor.fetchone()
-            if not conv:
+            conv_row = await cursor.fetchone()
+            if not conv_row:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Conversation not found or access denied"
                 )
+            conv = dict(conv_row)
 
             # 2. Fetch all messages ordered by timestamp
             cursor_msg = await db.execute("""
@@ -131,28 +138,30 @@ class ChatService:
             msg_rows = await cursor_msg.fetchall()
 
             messages = []
-            for m in msg_rows:
+            for msg in msg_rows:
+                m = dict(msg)
                 messages.append({
-                    "id": m["id"],
-                    "conversationId": m["conversationId"],
-                    "userId": m["userId"],
-                    "role": m["role"],
-                    "content": m["content"],
-                    "model": m["model"],
-                    "tokens": m["tokens"],
-                    "createdAt": m["createdAt"]
+                    "id": str(m.get("id")),
+                    "conversationId": str(m.get("conversationId")),
+                    "userId": str(m.get("userId")),
+                    "role": m.get("role") or "user",
+                    "content": m.get("content") or "",
+                    "model": m.get("model") or "gemini-1.5-flash",
+                    "tokens": int(m.get("tokens") or 0) if m.get("tokens") is not None else 0,
+                    "fileIds": m.get("fileIds") if isinstance(m.get("fileIds"), list) else None,
+                    "createdAt": str(m.get("createdAt") or "")
                 })
 
             return {
-                "id": conv["id"],
-                "userId": conv["userId"],
-                "title": conv["title"],
-                "model": conv["model"],
-                "systemPrompt": conv["systemPrompt"],
-                "createdAt": conv["createdAt"],
-                "updatedAt": conv["updatedAt"],
-                "isPinned": bool(conv["isPinned"]),
-                "isArchived": bool(conv["isArchived"]),
+                "id": str(conv.get("id")),
+                "userId": str(conv.get("userId")),
+                "title": conv.get("title") or "New Chat",
+                "model": conv.get("model") or "gemini-1.5-flash",
+                "systemPrompt": conv.get("systemPrompt"),
+                "createdAt": str(conv.get("createdAt") or ""),
+                "updatedAt": str(conv.get("updatedAt") or ""),
+                "isPinned": bool(conv.get("isPinned") or False),
+                "isArchived": bool(conv.get("isArchived") or False),
                 "messages": messages
             }
 
