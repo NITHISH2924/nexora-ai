@@ -5,7 +5,7 @@
 class ChatController {
   constructor() {
     this.activeConversationId = null;
-    this.activeModel = localStorage.getItem('nexora_model') || 'gemini-1.5-flash';
+    this.activeModel = localStorage.getItem('nexora_model') || 'nexora-smart-router';
     this.systemPrompt = localStorage.getItem('nexora_system_prompt') || '';
     this.isStreaming = false;
     this.abortController = null;
@@ -525,6 +525,15 @@ class ChatController {
           assistantRow.id = `msg-${data.assistantMessage.id}`;
         }
 
+        // Show routed model tag if smart router dispatched
+        if (data && data.actualModel) {
+          const modelTag = assistantRow.querySelector('.message-model-tag');
+          if (modelTag) {
+            const cleanName = data.actualModel.replace('gemini-', 'Gemini ').replace('gpt-', 'GPT-').replace('claude-', 'Claude ');
+            modelTag.innerHTML = `<span title="Dispatched by NEXORA Smart Router" style="color:var(--color-primary);font-weight:600;">⚡ ${cleanName}</span>`;
+          }
+        }
+
         // Add action buttons
         this.appendAssistantActions(assistantRow, accumulatedText);
 
@@ -714,12 +723,17 @@ class ChatController {
     }
   }
 
-  createAssistantRow(msgId, modelName = 'gemini-1.5-flash') {
+  createAssistantRow(msgId, modelName = 'nexora-smart-router') {
     const row = document.createElement('div');
     row.className = 'chat-message-row assistant-row';
     row.id = `msg-${msgId}`;
 
-    const displayModel = (modelName || 'NEXORA AI').replace('gemini-', 'Gemini ').replace('gpt-', 'GPT-');
+    let displayModel = 'NEXORA AI';
+    if (modelName === 'nexora-smart-router') {
+      displayModel = '⚡ Smart Router';
+    } else if (modelName) {
+      displayModel = modelName.replace('gemini-', 'Gemini ').replace('gpt-', 'GPT-').replace('claude-', 'Claude ');
+    }
 
     row.innerHTML = `
       <div class="message-avatar">

@@ -1,6 +1,6 @@
 import base64
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body
 from fastapi.responses import FileResponse
 
@@ -24,6 +24,29 @@ async def get_voice_status(
 ):
     """Check provider connectivity status and supported voice personas."""
     return voice_service.get_status()
+
+@router.post("/wake-greet")
+async def wake_word_greeting(
+    payload: Optional[Dict[str, Any]] = Body(default=None),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Phase 5: Personalized 'Hey NEXORA' Wake-Word Greeting.
+    Extracts authenticated user display name from verified profile:
+    - User 'Nithish Kumar': -> 'Yes, Nithish? I'm listening.'
+    - User 'Arun': -> 'Yes, Arun? I'm listening.'
+    - Missing name: -> 'Yes, I'm listening.'
+    Synthesizes and streams mature adult male voice response.
+    """
+    voice = "onyx"
+    if payload and isinstance(payload, dict):
+        voice = payload.get("voice", "onyx")
+
+    return await voice_service.generate_wake_greeting(
+        user_id=current_user["userId"],
+        full_name=current_user.get("fullName"),
+        voice=voice
+    )
 
 @router.post("/transcribe", response_model=VoiceTranscribeResponse)
 async def transcribe_audio_file(

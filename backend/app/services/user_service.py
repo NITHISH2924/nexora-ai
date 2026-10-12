@@ -20,11 +20,14 @@ from backend.app.models import (
 )
 from backend.app.services.email_service import email_service
 
-def row_to_user_dict(row: aiosqlite.Row) -> dict:
-    """Convert sqlite Row to safe user dict for UserResponse."""
+def row_to_user_dict(row: Any) -> dict:
+    """Convert db row or dict to safe user dict for UserResponse."""
+    keys = row.keys() if hasattr(row, "keys") else dict(row).keys()
+    full_name = row["fullName"] if "fullName" in keys else (row["displayName"] if "displayName" in keys else None)
     return {
         "userId": row["userId"],
         "email": row["email"],
+        "fullName": full_name,
         "role": row["role"],
         "accountCreatedAt": row["accountCreatedAt"],
         "lastLoginAt": row["lastLoginAt"],
@@ -56,7 +59,12 @@ class UserService:
     @classmethod
     async def get_user_by_id(cls, user_id: str) -> Optional[dict]:
         async with get_db() as db:
-            async with db.execute("SELECT * FROM users WHERE userId = ?", (user_id,)) as cursor:
+            async with db.execute("""
+            SELECT u.*, p.displayName, p.displayName as fullName
+            FROM users u
+            LEFT JOIN user_preferences p ON u.userId = p.userId
+            WHERE u.userId = ?
+            """, (user_id,)) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return dict(row)
@@ -84,6 +92,9 @@ class UserService:
         hashed = hash_password(data.password)
         now_dt = datetime.now(timezone.utc)
         created_at = now_dt.isoformat()
+        full_name = getattr(data, "fullName", None)
+        if full_name:
+            full_name = full_name.strip()
         
         # Email verification token valid for 24 hours
         verify_token = generate_secure_token()
@@ -106,6 +117,11 @@ class UserService:
                 verify_token if not email_verified else None,
                 verify_expires if not email_verified else None
             ))
+            if full_name:
+                await db.execute("""
+                INSERT INTO user_preferences (userId, displayName, updatedAt)
+                VALUES (?, ?, ?)
+                """, (user_id, full_name, created_at))
             await db.commit()
             await cls.log_activity(db, user_id, "REGISTER", f"Account created with role {role}", ip_address, user_agent)
 
@@ -124,6 +140,7 @@ class UserService:
         user_profile = {
             "userId": user_id,
             "email": clean_email,
+            "fullName": full_name,
             "role": role,
             "accountCreatedAt": created_at,
             "lastLoginAt": created_at,
@@ -309,18 +326,23 @@ class UserService:
 
     @classmethod
     async def get_all_users_admin(cls, search: Optional[str] = None, role_filter: Optional[str] = None, status_filter: Optional[str] = None) -> List[dict]:
-        query = "SELECT userId, email, role, accountCreatedAt, lastLoginAt, loginCount, accountStatus, emailVerified FROM users WHERE 1=1"
+        query = """
+        SELECT u.userId, u.email, u.role, u.accountCreatedAt, u.lastLoginAt, u.loginCount, u.accountStatus, u.emailVerified, p.displayName as fullName
+        FROM users u
+        LEFT JOIN user_preferences p ON u.userId = p.userId
+        WHERE 1=1
+        """
         params = []
         if search and search.strip():
-            query += " AND email LIKE ?"
+            query += " AND u.email LIKE ?"
             params.append(f"%{search.strip()}%")
         if role_filter and role_filter.strip():
-            query += " AND role = ?"
+            query += " AND u.role = ?"
             params.append(role_filter.strip().upper())
         if status_filter and status_filter.strip():
-            query += " AND accountStatus = ?"
+            query += " AND u.accountStatus = ?"
             params.append(status_filter.strip().upper())
-        query += " ORDER BY accountCreatedAt DESC"
+        query += " ORDER BY u.accountCreatedAt DESC"
 
         async with get_db() as db:
             async with db.execute(query, tuple(params)) as cursor:

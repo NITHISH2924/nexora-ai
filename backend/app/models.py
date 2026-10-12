@@ -21,6 +21,7 @@ class PasswordValidatorMixin:
 class UserRegisterRequest(BaseModel, PasswordValidatorMixin):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    fullName: Optional[str] = None
 
 class UserLoginRequest(BaseModel):
     email: EmailStr
@@ -67,6 +68,7 @@ class ChangePasswordRequest(BaseModel):
 class UserResponse(BaseModel):
     userId: str
     email: str
+    fullName: Optional[str] = None
     role: str # 'USER' or 'OWNER'
     accountCreatedAt: str
     lastLoginAt: Optional[str] = None
@@ -524,6 +526,41 @@ class MemoryListResponse(BaseModel):
     memories: List[MemoryItemResponse]
     memoryEnabled: bool = True
     total: int
+
+# Phase 4: AI Video Studio & Learning Hub Models
+class VideoPlanRequest(BaseModel):
+    topic: str = Field(..., min_length=2, max_length=500)
+    style: Optional[str] = "cinematic"  # cinematic, tutorial, marketing, documentary, vlog
+    durationSeconds: Optional[int] = 60
+    targetAudience: Optional[str] = "general"
+    model: Optional[str] = None
+
+class VideoPlanResponse(BaseModel):
+    topic: str
+    style: str
+    durationSeconds: int
+    title: str
+    scenes: List[Dict[str, Any]]
+    audioScript: str
+    externalProviderRequired: bool = True
+    providerStatus: str = "Video storyboard and audio script ready. Direct pixel generation requires configuring RUNWAY_API_KEY or REPLICATE_API_TOKEN."
+
+class LearningAssistRequest(BaseModel):
+    action: str  # quiz, flashcards, study_plan, tutor_explain
+    topic: str = Field(..., min_length=2, max_length=500)
+    level: Optional[str] = "beginner"  # beginner, intermediate, advanced
+    documentContext: Optional[str] = None
+    questionCount: Optional[int] = 5
+    model: Optional[str] = None
+
+class LearningAssistResponse(BaseModel):
+    action: str
+    topic: str
+    level: str
+    title: str
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+
 
 
 

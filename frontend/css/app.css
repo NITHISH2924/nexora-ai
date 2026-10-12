@@ -3091,3 +3091,62 @@
   border-bottom: 1px solid #1F2937;
   color: #E5E7EB;
 }
+
+/* ==========================================================================
+   VOICE ASSISTANT ORB ANIMATION & MICRO-INTERACTIONS
+   ========================================================================== */
+.voice-orb-wrapper {
+  position: relative;
+}
+
+.voice-orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: voicePulse 3s infinite ease-out;
+}
+
+.voice-orb-ring.ring-1 {
+  width: 130px;
+  height: 130px;
+  background: rgba(139, 92, 246, 0.25);
+  animation-delay: 0s;
+}
+
+.voice-orb-ring.ring-2 {
+  width: 155px;
+  height: 155px;
+  background: rgba(139, 92, 246, 0.15);
+  animation-delay: 0.8s;
+}
+
+.voice-orb-ring.ring-3 {
+  width: 180px;
+  height: 180px;
+  background: rgba(139, 92, 246, 0.08);
+  animation-delay: 1.6s;
+}
+
+@keyframes voicePulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+
+.pulsing-mic-dot {
+  animation: micBlink 1.5s infinite;
+}
+
+@keyframes micBlink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}

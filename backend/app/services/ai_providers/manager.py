@@ -99,17 +99,167 @@ class AIProviderManager:
             self.builtin
         ]
 
+        self.smart_router_model = {
+            "id": "nexora-smart-router",
+            "name": "NEXORA Smart Router (Auto)",
+            "provider": "nexora",
+            "description": "Intelligent task-based auto-router: dynamically dispatches to coding, reasoning, search, vision, or ultra-fast models based on request type.",
+            "contextWindow": "128,000 tokens",
+            "category": "Smart Router"
+        }
+
+    def classify_task(self, prompt: Optional[str], has_images: bool = False, has_files: bool = False) -> Dict[str, Any]:
+        """
+        Classifies the incoming user request into a specialized task type for intelligent model routing:
+        - vision: Image attached or image understanding
+        - coding: Software engineering, code generation, debugging, refactoring
+        - reasoning: Multi-step logic, math, system architecture, philosophy
+        - search: Current news, real-time facts, recent events (2024-2026), live data
+        - document: File/document summarization or QA
+        - simple: Casual conversation, quick definitions, greetings
+        """
+        if has_images:
+            return {"taskType": "vision", "reason": "Image attachments detected; requires high-capability visual comprehension model."}
+        if has_files:
+            return {"taskType": "document", "reason": "Document attachments detected; requires large context document processing."}
+
+        text = (prompt or "").lower().strip()
+        import re
+
+        # Vision keywords
+        if any(w in text for w in ["in this image", "look at this photo", "describe the picture", "analyze this diagram", "visual screenshot"]):
+            return {"taskType": "vision", "reason": "Visual inspection intent detected."}
+
+        # Coding keywords
+        code_patterns = [
+            r"\b(python|javascript|typescript|c\+\+|java|golang|rust|html|css|sql|bash|powershell|regex)\b",
+            r"\b(function|def|class|async|await|const|var|let|import|from|return|struct|enum)\b",
+            r"\b(debug|fix this error|stack trace|exception|syntax error|refactor|unit test|compile)\b",
+            r"\b(write a script|build an api|fastapi|react|vue|express|django|flask|spring)\b",
+            r"```[a-z]*"
+        ]
+        if any(re.search(pat, text) for pat in code_patterns):
+            return {"taskType": "coding", "reason": "Programming or technical software development query detected."}
+
+        # Current search / real-time facts
+        search_patterns = [
+            r"\b(latest|current|recent|today's|news|weather|stock price|who won|election)\b",
+            r"\b(2025|2026|today|this week|right now)\b"
+        ]
+        if any(re.search(pat, text) for pat in search_patterns):
+            return {"taskType": "search", "reason": "Time-sensitive information or recent event inquiry detected."}
+
+        # Complex reasoning & mathematics
+        reasoning_patterns = [
+            r"\b(prove|step[- ]by[- ]step proof|derive|calculate|solve the equation|integral)\b",
+            r"\b(system architecture|trade-offs between|philosophical implication|logic puzzle)\b",
+            r"\b(compare and contrast|in-depth analysis|comprehensive breakdown)\b"
+        ]
+        if any(re.search(pat, text) for pat in reasoning_patterns):
+            return {"taskType": "reasoning", "reason": "Advanced multi-step reasoning, mathematical proof, or architectural analysis detected."}
+
+        # Simple conversational or concise queries
+        words = text.split()
+        if len(words) < 10 or text in ["hi", "hello", "hey", "who are you", "what can you do", "good morning", "thanks", "thank you"]:
+            return {"taskType": "simple", "reason": "Brief everyday conversational or lightweight query detected."}
+
+        return {"taskType": "general", "reason": "Standard conversational task."}
+
     def list_models(self) -> List[Dict[str, Any]]:
-        """List all available models and their active status."""
-        all_models = []
+        """List all available models with NEXORA Smart Router as the premier option."""
+        all_models = [self.smart_router_model]
         for p in self.providers:
             all_models.extend(p.get_supported_models())
         return all_models
 
-    def resolve_provider_and_model(self, requested_model: Optional[str] = None) -> Tuple[BaseAIProvider, str]:
-        """Resolves the best provider and concrete model to use."""
-        req = (requested_model or settings.DEFAULT_AI_MODEL or "gemini-1.5-flash").lower()
+    def resolve_provider_and_model(
+        self,
+        requested_model: Optional[str] = None,
+        prompt: Optional[str] = None,
+        has_images: bool = False,
+        has_files: bool = False
+    ) -> Tuple[BaseAIProvider, str]:
+        """
+        Resolves the best provider and concrete model to use.
+        When requested_model is 'nexora-smart-router' (or empty/auto), runs intelligent task classification
+        and dispatches to the most capable configured model or fallback.
+        """
+        req = (requested_model or "nexora-smart-router").lower().strip()
 
+        # Handle explicit Intelligent Smart Router mode
+        if req in ("nexora-smart-router", "auto", "router", "default"):
+            classification = self.classify_task(prompt, has_images=has_images, has_files=has_files)
+            task_type = classification["taskType"]
+            logger.info(f"NEXORA Smart Router: Classified task as '{task_type}' ({classification['reason']})")
+
+            # 1. Vision tasks
+            if task_type == "vision":
+                if self.openai.is_configured:
+                    return self.openai, "gpt-4o"
+                if self.gemini.is_configured:
+                    return self.gemini, "gemini-1.5-flash"
+                return self.builtin, "nexora-core-v2"
+
+            # 2. Coding tasks
+            if task_type == "coding":
+                if self.anthropic.is_configured:
+                    return self.anthropic, "claude-3-5-sonnet-20241022"
+                if self.deepseek.is_configured:
+                    return self.deepseek, "deepseek-chat"
+                if self.openai.is_configured:
+                    return self.openai, "gpt-4o"
+                if self.gemini.is_configured:
+                    return self.gemini, "gemini-1.5-flash"
+                return self.builtin, "nexora-core-v2"
+
+            # 3. Deep Reasoning
+            if task_type == "reasoning":
+                if self.deepseek.is_configured:
+                    return self.deepseek, "deepseek-chat"
+                if self.openai.is_configured:
+                    return self.openai, "gpt-4o"
+                if self.anthropic.is_configured:
+                    return self.anthropic, "claude-3-5-sonnet-20241022"
+                if self.gemini.is_configured:
+                    return self.gemini, "gemini-1.5-flash"
+                return self.builtin, "nexora-core-v2"
+
+            # 4. Search / Real-time info
+            if task_type == "search":
+                if self.gemini.is_configured:
+                    return self.gemini, "gemini-1.5-flash"
+                if self.openai.is_configured:
+                    return self.openai, "gpt-4o-mini"
+                return self.builtin, "nexora-core-v2"
+
+            # 5. Document analysis
+            if task_type == "document":
+                if self.gemini.is_configured:
+                    return self.gemini, "gemini-1.5-flash"
+                if self.openai.is_configured:
+                    return self.openai, "gpt-4o"
+                return self.builtin, "nexora-core-v2"
+
+            # 6. Ultra-fast / Lightweight tasks
+            if task_type == "simple":
+                if self.groq.is_configured:
+                    return self.groq, "llama-3.3-70b-versatile"
+                if self.openai.is_configured:
+                    return self.openai, "gpt-4o-mini"
+                if self.gemini.is_configured:
+                    return self.gemini, "gemini-1.5-flash"
+                return self.builtin, "nexora-core-v2"
+
+            # Default smart router choice
+            if self.gemini.is_configured:
+                return self.gemini, "gemini-1.5-flash"
+            if self.openai.is_configured:
+                return self.openai, "gpt-4o-mini"
+            if self.anthropic.is_configured:
+                return self.anthropic, "claude-3-5-sonnet-20241022"
+            return self.builtin, "nexora-core-v2"
+
+        # Explicit model choices
         # Check Gemini
         if "gemini" in req:
             if self.gemini.is_configured:
@@ -165,14 +315,27 @@ class AIProviderManager:
                 last_user_msg = m.get("content", "")
                 break
         
+        has_images = bool(kwargs.get("images"))
+        has_files = "=== ATTACHED FILE:" in last_user_msg
+
         if is_leadership_query(last_user_msg):
-            provider, actual_model = self.resolve_provider_and_model(model)
+            provider, actual_model = self.resolve_provider_and_model(
+                requested_model=model,
+                prompt=last_user_msg,
+                has_images=has_images,
+                has_files=has_files
+            )
             return settings.LEADERSHIP_RESPONSE, actual_model
 
         # 2. Compile system prompt with official leadership identity
         compiled_sys_prompt = compile_system_prompt(system_prompt)
 
-        provider, actual_model = self.resolve_provider_and_model(model)
+        provider, actual_model = self.resolve_provider_and_model(
+            requested_model=model,
+            prompt=last_user_msg,
+            has_images=has_images,
+            has_files=has_files
+        )
         try:
             content = await provider.generate_response(
                 messages=messages,
@@ -209,6 +372,9 @@ class AIProviderManager:
                 last_user_msg = m.get("content", "")
                 break
 
+        has_images = bool(kwargs.get("images"))
+        has_files = "=== ATTACHED FILE:" in last_user_msg
+
         if is_leadership_query(last_user_msg):
             import asyncio, re
             words = re.findall(r'\S+|\s+', settings.LEADERSHIP_RESPONSE)
@@ -220,7 +386,12 @@ class AIProviderManager:
         # 2. Compile system prompt with official leadership identity
         compiled_sys_prompt = compile_system_prompt(system_prompt)
 
-        provider, actual_model = self.resolve_provider_and_model(model)
+        provider, actual_model = self.resolve_provider_and_model(
+            requested_model=model,
+            prompt=last_user_msg,
+            has_images=has_images,
+            has_files=has_files
+        )
         try:
             async for chunk in provider.stream_response(
                 messages=messages,

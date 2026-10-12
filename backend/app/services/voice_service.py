@@ -35,6 +35,60 @@ class VoiceService:
     """
 
     SUPPORTED_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    DEFAULT_VOICE = "onyx"  # Mature, calm, authoritative adult male tone
+
+    def format_personalized_greeting(self, full_name: Optional[str]) -> Tuple[str, Optional[str]]:
+        """
+        Formats the official 'Hey NEXORA' wake-word greeting personalized with the user's authenticated display name.
+        - If profile name is 'Nithish Kumar': -> 'Yes, Nithish? I'm listening.'
+        - If profile name is 'Arun': -> 'Yes, Arun? I'm listening.'
+        - If missing or empty: -> 'Yes, I'm listening.'
+        Never hardcodes any specific user name for everyone.
+        """
+        import re
+        if not full_name or not full_name.strip():
+            return "Yes, I'm listening.", None
+
+        clean = full_name.strip()
+        first_name = clean.split()[0] if " " in clean else clean
+        first_name = re.sub(r'[^a-zA-Z0-9_\-]', '', first_name).strip()
+
+        if not first_name:
+            return "Yes, I'm listening.", None
+
+        return f"Yes, {first_name}? I'm listening.", first_name
+
+    async def generate_wake_greeting(
+        self,
+        user_id: str,
+        full_name: Optional[str],
+        voice: str = "onyx"
+    ) -> Dict[str, Any]:
+        """
+        Generates personalized wake greeting text and synthesizes response speech audio.
+        """
+        greeting_text, first_name = self.format_personalized_greeting(full_name)
+        
+        synth_res = await self.synthesize_speech(
+            user_id=user_id,
+            req=VoiceSynthesizeRequest(
+                text=greeting_text,
+                voice=voice if voice in self.SUPPORTED_VOICES else self.DEFAULT_VOICE,
+                speed=1.0,
+                model="tts-1"
+            )
+        )
+
+        return {
+            "greetingText": greeting_text,
+            "userName": first_name,
+            "audioId": synth_res.audioId,
+            "audioUrl": synth_res.audioUrl,
+            "audioBase64": synth_res.audioBase64,
+            "durationSeconds": synth_res.durationSeconds,
+            "voice": voice if voice in self.SUPPORTED_VOICES else self.DEFAULT_VOICE,
+            "provider": synth_res.provider
+        }
 
     def _get_user_voice_dir(self, user_id: str) -> Path:
         voice_dir = settings.UPLOAD_DIR / user_id / "voice"

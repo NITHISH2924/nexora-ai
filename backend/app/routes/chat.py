@@ -262,16 +262,21 @@ async def stream_chat_response(
         # Save assistant message in database
         full_text = "".join(full_content_accumulated)
         if full_text.strip():
+            _, actual_model = ai_manager.resolve_provider_and_model(
+                model_to_use,
+                prompt=req.content,
+                has_images=bool(images_payload)
+            )
             asst_msg = await chat_service.add_message(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 role="assistant",
                 content=full_text,
-                model=model_to_use
+                model=actual_model
             )
             # Fetch latest conversation to return fresh title if auto-generated
             refreshed_conv = await chat_service.get_conversation(user_id, conversation_id)
-            yield f"event: done\ndata: {json.dumps({'assistantMessage': asst_msg, 'conversationTitle': refreshed_conv['title']})}\n\n"
+            yield f"event: done\ndata: {json.dumps({'assistantMessage': asst_msg, 'conversationTitle': refreshed_conv['title'], 'actualModel': actual_model})}\n\n"
         else:
             yield f"event: done\ndata: {json.dumps({'done': True})}\n\n"
 

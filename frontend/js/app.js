@@ -135,6 +135,12 @@ function switchWorkspaceView(viewId) {
     loadImageGenGallery();
   } else if (viewId === 'projects') {
     loadProjects();
+  } else if (viewId === 'video') {
+    // Video studio view ready
+  } else if (viewId === 'learning') {
+    // Learning hub view ready
+  } else if (viewId === 'voice') {
+    // Voice room view ready
   }
 }
 
@@ -331,16 +337,25 @@ function renderOwnerUsersTable(users) {
     if (!isoStr) return '-';
     try {
       const d = new Date(isoStr);
-      return isNaN(d.getTime()) ? isoStr.slice(0, 10) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      if (isNaN(d.getTime())) return isoStr.slice(0, 16);
+      return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(d) + ' IST';
     } catch {
-      return isoStr.slice(0, 10);
+      return isoStr.slice(0, 16);
     }
   };
 
   tbody.innerHTML = users.map(u => `
     <tr>
       <td>
-        <div style="font-weight:600;color:var(--color-text-main);">${u.email}</div>
+        <div style="font-weight:600;color:var(--color-text-main);">${u.fullName ? `${u.fullName} <span style="font-weight:400;color:var(--color-text-muted);font-size:12px;">(${u.email})</span>` : u.email}</div>
         <div style="font-size:11px;color:var(--color-text-muted);font-family:monospace;">${u.userId}</div>
       </td>
       <td><span class="badge ${u.role === 'OWNER' ? 'badge-owner' : (u.role === 'CEO' ? 'badge-ceo' : 'badge-user')}">${u.role}</span></td>
@@ -3327,6 +3342,365 @@ function escapeAttr(str) {
     .replace(/\r/g, '');
 }
 
+/* ==========================================================================
+   PHASE 4: AI VIDEO STUDIO & LEARNING HUB WORKSPACE CONTROLLER
+   ========================================================================== */
 
+async function handleGenerateVideoPlan() {
+  const topicInput = document.getElementById('video-input-topic');
+  const styleSelect = document.getElementById('video-select-style');
+  const durationInput = document.getElementById('video-input-duration');
+  const audienceInput = document.getElementById('video-input-audience');
+  const btn = document.getElementById('btn-generate-video-plan');
 
+  const topic = topicInput?.value?.trim();
+  if (!topic) {
+    window.showToast('Please enter a video topic or concept to plan.', 'warning');
+    return;
+  }
 
+  const origBtnHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="pulse-loader" style="width:12px;height:12px;display:inline-block;margin-right:6px;"></span> Generating Storyboard...`;
+  }
+
+  try {
+    const res = await window.toolsApi.planVideo({
+      topic,
+      style: styleSelect?.value || 'cinematic',
+      durationSeconds: parseInt(durationInput?.value || '60', 10),
+      targetAudience: audienceInput?.value || 'general'
+    });
+
+    const resTitle = document.getElementById('video-result-title');
+    const scenesGrid = document.getElementById('video-scenes-grid');
+    const scriptBox = document.getElementById('video-audio-script');
+    const container = document.getElementById('video-results-container');
+
+    if (resTitle) resTitle.innerText = res.title || 'Video Storyboard';
+    if (scriptBox) scriptBox.innerText = res.audioScript || '';
+
+    if (scenesGrid && res.scenes) {
+      scenesGrid.innerHTML = res.scenes.map(s => `
+        <div style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:10px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:700;color:var(--color-primary);text-transform:uppercase;">Scene ${s.sceneNumber}</span>
+            <span style="font-size:11px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:12px;">${s.durationSeconds}s</span>
+          </div>
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px;color:var(--color-text-main);">${escapeHtml(s.title)}</div>
+          <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:8px;font-family:monospace;">${escapeHtml(s.shotType)}</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.5;">${escapeHtml(s.visualDescription)}</div>
+        </div>
+      `).join('');
+    }
+
+    if (container) container.style.display = 'block';
+    window.showToast('Video storyboard and production script generated!', 'success');
+  } catch (err) {
+    window.showToast(err.message || 'Video planning failed', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origBtnHtml;
+    }
+  }
+}
+window.handleGenerateVideoPlan = handleGenerateVideoPlan;
+
+async function handleGenerateLearning() {
+  const topicInput = document.getElementById('learning-input-topic');
+  const actionSelect = document.getElementById('learning-select-action');
+  const levelSelect = document.getElementById('learning-select-level');
+  const btn = document.getElementById('btn-generate-learning');
+
+  const topic = topicInput?.value?.trim();
+  if (!topic) {
+    window.showToast('Please enter a concept or subject to study.', 'warning');
+    return;
+  }
+
+  const origBtnHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="pulse-loader" style="width:12px;height:12px;display:inline-block;margin-right:6px;"></span> Generating Learning Module...`;
+  }
+
+  try {
+    const res = await window.toolsApi.assistLearning({
+      topic,
+      action: actionSelect?.value || 'tutor_explain',
+      level: levelSelect?.value || 'beginner'
+    });
+
+    const resTitle = document.getElementById('learning-result-title');
+    const contentBox = document.getElementById('learning-result-content');
+    const container = document.getElementById('learning-results-container');
+
+    if (resTitle) resTitle.innerText = res.title || 'Learning Material';
+    if (contentBox) {
+      if (typeof marked !== 'undefined') {
+        contentBox.innerHTML = marked.parse(res.content || '');
+      } else {
+        contentBox.innerText = res.content || '';
+      }
+    }
+
+    if (container) container.style.display = 'block';
+    window.showToast('Learning module ready!', 'success');
+  } catch (err) {
+    window.showToast(err.message || 'Learning generation failed', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origBtnHtml;
+    }
+  }
+}
+window.handleGenerateLearning = handleGenerateLearning;
+
+function copyLearningOutput() {
+  const contentBox = document.getElementById('learning-result-content');
+  if (contentBox) {
+    navigator.clipboard.writeText(contentBox.innerText);
+    window.showToast('Learning material copied to clipboard!', 'success');
+  }
+}
+window.copyLearningOutput = copyLearningOutput;
+
+/* ==========================================================================
+   PHASE 5: HEY NEXORA PERSONALIZED VOICE ASSISTANT CONTROLLER
+   ========================================================================== */
+
+let voiceRecognition = null;
+let wakeWordRecognizer = null;
+let isVoiceListening = false;
+let currentPlayingVoiceAudio = null;
+
+async function handleWakeGreeting() {
+  try {
+    const statusBadge = document.getElementById('voice-room-status-badge');
+    const transcriptBox = document.getElementById('voice-room-transcript');
+    const floatingText = document.getElementById('floating-voice-text');
+    const floatingCard = document.getElementById('floating-voice-card');
+
+    if (statusBadge) statusBadge.innerText = 'Connecting to NEXORA voice persona...';
+    if (floatingCard) floatingCard.style.display = 'block';
+
+    const res = await window.voiceApi.wakeGreet({ voice: 'onyx' });
+    const greeting = res.greetingText || "Yes, I'm listening.";
+
+    if (transcriptBox) transcriptBox.innerHTML = `<strong>NEXORA:</strong> ${escapeHtml(greeting)}`;
+    if (floatingText) floatingText.innerText = greeting;
+    if (statusBadge) statusBadge.innerText = `Speaking: "${greeting}"`;
+
+    if (res.audioUrl) {
+      playVoiceAudio(res.audioUrl);
+    }
+    window.showToast(greeting, 'info', 3000);
+  } catch (err) {
+    console.error('Wake greeting error:', err);
+    window.showToast('Voice greeting: ' + (err.message || 'Service unavailable'), 'error');
+  }
+}
+window.handleWakeGreeting = handleWakeGreeting;
+
+function playVoiceAudio(audioUrl) {
+  stopSpeechAudio();
+  try {
+    const audio = new Audio(audioUrl);
+    currentPlayingVoiceAudio = audio;
+
+    const interruptBtn = document.getElementById('btn-voice-interrupt');
+    const floatingStopBtn = document.getElementById('btn-floating-stop');
+    if (interruptBtn) interruptBtn.style.display = 'inline-flex';
+    if (floatingStopBtn) floatingStopBtn.style.display = 'inline-flex';
+
+    audio.onended = () => {
+      stopSpeechAudio();
+      const statusBadge = document.getElementById('voice-room-status-badge');
+      if (statusBadge) statusBadge.innerText = 'Ready — Listening for follow-up...';
+    };
+
+    audio.play().catch(e => console.warn('Audio auto-play prevented:', e));
+  } catch (e) {
+    console.warn('Audio play failed:', e);
+  }
+}
+
+function stopSpeechAudio() {
+  if (currentPlayingVoiceAudio) {
+    try {
+      currentPlayingVoiceAudio.pause();
+      currentPlayingVoiceAudio.currentTime = 0;
+    } catch (_) {}
+    currentPlayingVoiceAudio = null;
+  }
+  const interruptBtn = document.getElementById('btn-voice-interrupt');
+  const floatingStopBtn = document.getElementById('btn-floating-stop');
+  if (interruptBtn) interruptBtn.style.display = 'none';
+  if (floatingStopBtn) floatingStopBtn.style.display = 'none';
+
+  const statusBadge = document.getElementById('voice-room-status-badge');
+  if (statusBadge) statusBadge.innerText = 'Idle / Stopped';
+}
+window.stopSpeechAudio = stopSpeechAudio;
+
+function toggleVoiceListening() {
+  if (isVoiceListening) {
+    stopVoiceListening();
+  } else {
+    startVoiceListening();
+  }
+}
+window.toggleVoiceListening = toggleVoiceListening;
+
+function startVoiceListening() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    window.showToast('Speech Recognition not supported natively in this browser. Please use Push-to-Talk or text chat.', 'warning', 4000);
+    return;
+  }
+
+  try {
+    voiceRecognition = new SpeechRec();
+    voiceRecognition.continuous = false;
+    voiceRecognition.interimResults = false;
+    voiceRecognition.lang = 'en-US';
+
+    const statusBadge = document.getElementById('voice-room-status-badge');
+    const orb = document.getElementById('voice-room-orb-btn');
+
+    voiceRecognition.onstart = () => {
+      isVoiceListening = true;
+      if (statusBadge) statusBadge.innerText = 'Listening to your voice... Speak clearly.';
+      if (orb) orb.style.boxShadow = '0 0 50px rgba(16,185,129,0.7)';
+    };
+
+    voiceRecognition.onresult = async (event) => {
+      const speechText = event.results[0][0].transcript;
+      const transcriptBox = document.getElementById('voice-room-transcript');
+      if (transcriptBox) transcriptBox.innerHTML = `<strong>You:</strong> ${escapeHtml(speechText)}<br><em>Processing with NEXORA AI...</em>`;
+      
+      stopVoiceListening();
+      
+      try {
+        const pipelineRes = await window.voiceApi.pipeline({
+          audioBase64: btoa(speechText),
+          voice: 'onyx'
+        });
+        if (transcriptBox) {
+          transcriptBox.innerHTML = `<strong>You:</strong> ${escapeHtml(speechText)}<br><br><strong>NEXORA:</strong> ${escapeHtml(pipelineRes.aiResponse || '')}`;
+        }
+        if (pipelineRes.audioUrl) {
+          playVoiceAudio(pipelineRes.audioUrl);
+        }
+      } catch (err) {
+        if (transcriptBox) transcriptBox.innerHTML += `<br><span style="color:var(--color-danger);">${escapeHtml(err.message)}</span>`;
+      }
+    };
+
+    voiceRecognition.onerror = (event) => {
+      console.warn('Speech recognition error:', event.error);
+      stopVoiceListening();
+      if (event.error === 'not-allowed') {
+        window.showToast('Microphone permission denied. Enable microphone access in browser settings.', 'error');
+      } else {
+        window.showToast(`Voice error: ${event.error}`, 'warning');
+      }
+    };
+
+    voiceRecognition.onend = () => {
+      stopVoiceListening();
+    };
+
+    voiceRecognition.start();
+  } catch (err) {
+    console.error('Failed to start voice recognition:', err);
+    window.showToast('Microphone error: ' + err.message, 'error');
+  }
+}
+
+function stopVoiceListening() {
+  isVoiceListening = false;
+  if (voiceRecognition) {
+    try { voiceRecognition.stop(); } catch (_) {}
+    voiceRecognition = null;
+  }
+  const statusBadge = document.getElementById('voice-room-status-badge');
+  const orb = document.getElementById('voice-room-orb-btn');
+  if (statusBadge) statusBadge.innerText = 'Ready — Click Orb or Say "Hey NEXORA"';
+  if (orb) orb.style.boxShadow = '0 0 35px rgba(139,92,246,0.4)';
+}
+
+function toggleWakeWordListener(enabled) {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    if (enabled) window.showToast('Background wake-word detection requires Chrome or Edge.', 'warning');
+    return;
+  }
+
+  if (!enabled) {
+    if (wakeWordRecognizer) {
+      try { wakeWordRecognizer.stop(); } catch (_) {}
+      wakeWordRecognizer = null;
+    }
+    window.showToast('Hey NEXORA wake-word disabled.', 'info');
+    return;
+  }
+
+  try {
+    wakeWordRecognizer = new SpeechRec();
+    wakeWordRecognizer.continuous = true;
+    wakeWordRecognizer.interimResults = true;
+    wakeWordRecognizer.lang = 'en-US';
+
+    wakeWordRecognizer.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript.toLowerCase();
+        if (transcript.includes('hey nexora') || transcript.includes('nexora')) {
+          console.log('Wake-word "Hey NEXORA" detected!');
+          handleWakeGreeting();
+          break;
+        }
+      }
+    };
+
+    wakeWordRecognizer.onerror = (e) => {
+      if (e.error !== 'no-speech') {
+        console.warn('Wake-word recognizer error:', e.error);
+      }
+    };
+
+    wakeWordRecognizer.onend = () => {
+      const chk = document.getElementById('chk-continuous-wake-word');
+      if (chk && chk.checked) {
+        try { wakeWordRecognizer.start(); } catch (_) {}
+      }
+    };
+
+    wakeWordRecognizer.start();
+    window.showToast('Listening for "Hey NEXORA" wake phrase...', 'success');
+  } catch (err) {
+    console.warn('Continuous wake-word error:', err);
+  }
+}
+window.toggleWakeWordListener = toggleWakeWordListener;
+
+function toggleFloatingVoiceCard(show) {
+  const card = document.getElementById('floating-voice-card');
+  if (card) {
+    if (show !== undefined) {
+      card.style.display = show ? 'block' : 'none';
+    } else {
+      card.style.display = card.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+}
+window.toggleFloatingVoiceCard = toggleFloatingVoiceCard;
+
+function toggleFloatingVoiceListening() {
+  toggleFloatingVoiceCard(true);
+  handleWakeGreeting();
+}
+window.toggleFloatingVoiceListening = toggleFloatingVoiceListening;

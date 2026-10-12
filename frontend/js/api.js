@@ -266,6 +266,10 @@ const ownerApi = {
       method: 'PATCH',
       body: JSON.stringify({ role })
     });
+  },
+
+  async getSystemHealth() {
+    return await request('/owner/system-health', { method: 'GET' });
   }
 };
 
@@ -592,6 +596,20 @@ const toolsApi = {
       method: 'POST',
       body: JSON.stringify({ action, text, tone, targetLanguage, recipient, jobTitle, companyName, model })
     });
+  },
+
+  async planVideo({ topic, style = 'cinematic', durationSeconds = 60, targetAudience = 'general', model = null }) {
+    return request('/tools/video/plan', {
+      method: 'POST',
+      body: JSON.stringify({ topic, style, durationSeconds, targetAudience, model })
+    });
+  },
+
+  async assistLearning({ action, topic, level = 'beginner', documentContext = null, questionCount = 5, model = null }) {
+    return request('/tools/learning/assist', {
+      method: 'POST',
+      body: JSON.stringify({ action, topic, level, documentContext, questionCount, model })
+    });
   }
 };
 
@@ -623,6 +641,13 @@ const voiceApi = {
     return request('/voice/status', { method: 'GET' });
   },
 
+  async wakeGreet({ voice = 'onyx' } = {}) {
+    return request('/voice/wake-greet', {
+      method: 'POST',
+      body: JSON.stringify({ voice })
+    });
+  },
+
   async transcribe(audioBlob, language = 'en') {
     const token = TokenManager.getToken();
     const formData = new FormData();
@@ -646,14 +671,14 @@ const voiceApi = {
     return await res.json();
   },
 
-  async synthesize({ text, voice = 'alloy', speed = 1.0, model = 'tts-1' }) {
+  async synthesize({ text, voice = 'onyx', speed = 1.0, model = 'tts-1' }) {
     return request('/voice/synthesize', {
       method: 'POST',
       body: JSON.stringify({ text, voice, speed, model })
     });
   },
 
-  async pipeline({ audioBase64, voice = 'alloy', model = null, systemPrompt = null }) {
+  async pipeline({ audioBase64, voice = 'onyx', model = null, systemPrompt = null }) {
     return request('/voice/pipeline', {
       method: 'POST',
       body: JSON.stringify({ audioBase64, voice, model, systemPrompt })
