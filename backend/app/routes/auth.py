@@ -11,16 +11,10 @@ from backend.app.models import (
 )
 from backend.app.services.user_service import user_service, row_to_user_dict
 from backend.app.deps import get_current_user
-from backend.app.security import rate_limiter
+from backend.app.security import rate_limiter, get_client_ip
 from backend.app.config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 @router.post("/signup", response_model=AuthResponse)
 async def signup(data: UserRegisterRequest, request: Request, response: Response):

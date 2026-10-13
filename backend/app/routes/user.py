@@ -8,14 +8,9 @@ from backend.app.models import (
 )
 from backend.app.deps import get_current_user
 from backend.app.services.user_service import user_service, row_to_user_dict
+from backend.app.security import get_client_ip
 
 router = APIRouter(prefix="/api/user", tags=["User Profile"])
-
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 @router.get("/profile", response_model=UserResponse)
 async def get_profile(current_user: dict = Depends(get_current_user)):

@@ -35,15 +35,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Production CORS configuration
-cors_origins = list(set(settings.CORS_ORIGINS + [settings.FRONTEND_URL, "http://localhost:8000", "http://127.0.0.1:8000"]))
+# Production CORS configuration (Strict allowlist - No regex wildcards with credentials)
+cors_origins = settings.get_cors_allow_origins()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "Cache-Control"],
+    expose_headers=["Content-Disposition", "Content-Length", "Retry-After"],
 )
 
 # Security Headers Middleware
@@ -55,6 +55,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=()"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+
+        # Content Security Policy (enforcing frame-ancestors 'none', script/style/font allowlists)
+        csp_directives = [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+            "font-src 'self' https://fonts.gstatic.com data:",
+            "img-src 'self' data: blob: https:",
+            "media-src 'self' data: blob:",
+            "connect-src 'self' data: blob:",
+            "worker-src 'self' blob:",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+        ]
+        response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+
+        # HSTS (Strict-Transport-Security): Apply only for verified HTTPS production requests
+        is_https = (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto") == "https"
+        )
+        if is_https and settings.APP_ENV == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)

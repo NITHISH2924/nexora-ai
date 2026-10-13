@@ -27,9 +27,34 @@ class Settings:
     SECURE_COOKIES: bool = os.getenv("SECURE_COOKIES", "false" if APP_ENV != "production" else "true").lower() in ("true", "1", "yes")
 
     # CORS
-    CORS_ORIGINS: list = [
-        orig.strip() for orig in os.getenv("CORS_ORIGINS", f"{FRONTEND_URL},http://localhost:8000,http://127.0.0.1:8000").split(",") if orig.strip()
+    _raw_cors = os.getenv("CORS_ORIGINS", f"{FRONTEND_URL},http://localhost:8000,http://127.0.0.1:8000")
+    CORS_ORIGINS: list = [orig.strip() for orig in _raw_cors.split(",") if orig.strip()]
+
+    # Trusted reverse proxies (Loopback, RFC 1918 Private networks, Cloudflare CGNAT)
+    TRUSTED_PROXIES: list = [
+        p.strip() for p in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10").split(",") if p.strip()
     ]
+
+    def get_cors_allow_origins(self) -> list:
+        origins = set(self.CORS_ORIGINS)
+        if self.FRONTEND_URL:
+            origins.add(self.FRONTEND_URL.rstrip("/"))
+        if self.PRODUCTION_DOMAIN:
+            origins.add(f"https://{self.PRODUCTION_DOMAIN}".rstrip("/"))
+            origins.add(f"https://app.{self.PRODUCTION_DOMAIN}".rstrip("/"))
+        origins.update([
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "http://10.0.2.2:8000",
+            "capacitor://localhost",
+            "http://localhost",
+            "https://localhost"
+        ])
+        return sorted([o for o in origins if o])
 
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()

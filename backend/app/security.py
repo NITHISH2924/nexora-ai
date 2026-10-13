@@ -2,6 +2,7 @@ import time
 import secrets
 import bcrypt
 import jwt
+import ipaddress
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Tuple
 from fastapi import HTTPException, status, Request, Depends
@@ -90,3 +91,68 @@ rate_limiter = RateLimiter(
     window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
     max_requests=settings.RATE_LIMIT_MAX_REQUESTS
 )
+
+# ------------------------------------------------------------------------------
+# Secure Client IP Resolution & Trusted Proxy Validation
+# ------------------------------------------------------------------------------
+def get_trusted_proxy_networks() -> List[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    configured = getattr(settings, "TRUSTED_PROXIES", ["127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"])
+    networks = []
+    for item in configured:
+        try:
+            if "/" in item:
+                networks.append(ipaddress.ip_network(item, strict=False))
+            else:
+                ip = ipaddress.ip_address(item)
+                networks.append(ipaddress.ip_network(f"{ip}/{32 if ip.version == 4 else 128}"))
+        except ValueError:
+            continue
+    return networks
+
+def is_trusted_proxy(ip_str: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str.strip())
+        return any(ip in net for net in get_trusted_proxy_networks())
+    except (ValueError, AttributeError):
+        return False
+
+def get_client_ip(request: Request) -> str:
+    """
+    Safely resolve client IP address.
+    Defends against IP spoofing: does not trust arbitrary X-Forwarded-For headers
+    unless the request originates directly from a verified trusted proxy.
+    """
+    direct_ip = "127.0.0.1"
+    if request.client and request.client.host:
+        direct_ip = request.client.host.strip()
+
+    # If the direct peer is not a trusted proxy, return direct_ip directly
+    if not is_trusted_proxy(direct_ip):
+        return direct_ip
+
+    # If behind trusted proxy, inspect headers from right to left
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        for candidate in reversed(parts):
+            try:
+                parsed = ipaddress.ip_address(candidate)
+                # First non-trusted proxy IP encountered from the right is the verified client IP
+                if not any(parsed in net for net in get_trusted_proxy_networks()):
+                    return str(parsed)
+            except ValueError:
+                continue
+        if parts:
+            try:
+                return str(ipaddress.ip_address(parts[0]))
+            except ValueError:
+                pass
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        try:
+            return str(ipaddress.ip_address(real_ip.strip()))
+        except ValueError:
+            pass
+
+    return direct_ip
