@@ -38,6 +38,14 @@ def test_live_http():
         assert content_fragment in res.text, f"Content fragment '{content_fragment}' missing in {path}"
         print(f"    [PASS] {path:20} -> 200 OK (verified '{title_fragment}')")
 
+    # 1b. Test Public Health Endpoints
+    for h_path in ["/api/health", "/health"]:
+        h_res = session.get(h_path)
+        assert h_res.status_code == 200, f"Health endpoint {h_path} returned {h_res.status_code}"
+        h_json = h_res.json()
+        assert h_json.get("status") == "healthy"
+        print(f"    [PASS] {h_path:20} -> 200 OK (healthy)")
+
     # 2. Test Security Headers
     print("\n[2] Testing Security Headers...")
     res = session.get("/")

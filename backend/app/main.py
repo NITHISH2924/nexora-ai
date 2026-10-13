@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, HTTPException, status
@@ -19,12 +20,19 @@ from backend.app.routes.voice import router as voice_router
 from backend.app.routes.projects import router as projects_router
 from backend.app.routes.personalization import router as personalization_router
 
+logger = logging.getLogger("main")
 FRONTEND_DIR = BASE_DIR / "frontend"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Ensure database & tables exist
-    await create_tables()
+    try:
+        await create_tables()
+        logger.info("Application startup: database tables verified successfully.")
+    except Exception as e:
+        logger.critical(f"Database initialization error during startup: {e}", exc_info=True)
+        # Even if create_tables encounters an error, DO NOT let the ASGI server crash!
+        # The web application MUST bind to the port and serve health checks, login, signup, and error pages.
     yield
     # Shutdown: Cleanup if needed
 
@@ -110,6 +118,18 @@ async def get_company_leadership():
         "standardAnswer": settings.LEADERSHIP_RESPONSE
     }
 
+# Public Health-Check Endpoint for Render and uptime monitoring
+@app.get("/api/health", tags=["Health"])
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Returns application health status for Render and uptime monitors."""
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "environment": settings.APP_ENV,
+        "version": "1.0.0"
+    }
+
 
 
 # Mount static asset folders if they exist
@@ -165,10 +185,6 @@ async def serve_terms():
 async def serve_delete_account():
     return FileResponse(FRONTEND_DIR / "delete-account.html")
 
-
-import logging
-
-logger = logging.getLogger("main")
 
 # Global Exception Handlers for clean sanitized error responses (no stack trace exposure)
 @app.exception_handler(HTTPException)

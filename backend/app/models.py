@@ -360,8 +360,9 @@ class VoiceTranscribeResponse(BaseModel):
 
 class VoiceSynthesizeRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=4000)
-    voice: Optional[str] = "alloy"  # 'alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'
+    voice: Optional[str] = "onyx"  # Default mature adult male persona
     speed: Optional[float] = 1.0
+    pitch: Optional[float] = 1.0
     model: Optional[str] = "tts-1"
 
 class VoiceSynthesizeResponse(BaseModel):
@@ -372,10 +373,12 @@ class VoiceSynthesizeResponse(BaseModel):
     format: str = "wav"
     durationSeconds: Optional[float] = None
     provider: str
+    voice: Optional[str] = "onyx"
 
 class VoicePipelineRequest(BaseModel):
     audioBase64: Optional[str] = None
-    voice: Optional[str] = "alloy"
+    text: Optional[str] = None
+    voice: Optional[str] = "onyx"
     model: Optional[str] = None
     conversationId: Optional[str] = None
     systemPrompt: Optional[str] = None
@@ -385,11 +388,13 @@ class VoicePipelineResponse(BaseModel):
     aiResponse: str
     transcribedText: Optional[str] = None
     aiResponseText: Optional[str] = None
+    text: Optional[str] = None
     audioId: Optional[str] = None
     audioUrl: Optional[str] = None
     audioBase64: Optional[str] = None
     durationSeconds: Optional[float] = None
     model: str
+    action: Optional[Dict[str, Any]] = None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -397,6 +402,8 @@ class VoicePipelineResponse(BaseModel):
             self.transcribedText = self.transcript
         if not self.aiResponseText:
             self.aiResponseText = self.aiResponse
+        if not self.text:
+            self.text = self.aiResponse
 
 class VoiceStatusResponse(BaseModel):
     speechToTextConfigured: bool
@@ -410,6 +417,10 @@ class VoiceStatusResponse(BaseModel):
     voices: Optional[List[str]] = None
     setupGuide: Optional[str] = None
     setupMessage: Optional[str] = None
+    preferredMaleVoice: Optional[str] = "Microsoft Ravi (en-IN) / onyx"
+    status: Optional[str] = "operational"
+    wakePhrase: Optional[str] = "Hey NEXORA"
+    speechRecognition: Optional[str] = "en-IN"
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -421,6 +432,8 @@ class VoiceStatusResponse(BaseModel):
             self.voices = self.supportedVoices
         if not self.setupMessage:
             self.setupMessage = self.setupGuide
+        if not self.status:
+            self.status = "operational"
 
 # ==============================================================================
 # Phase 6: Projects, Personalization & Controlled Memory Models

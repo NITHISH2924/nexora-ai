@@ -678,10 +678,10 @@ const voiceApi = {
     });
   },
 
-  async pipeline({ audioBase64, voice = 'onyx', model = null, systemPrompt = null }) {
+  async pipeline({ audioBase64 = null, text = null, voice = 'onyx', model = null, systemPrompt = null } = {}) {
     return request('/voice/pipeline', {
       method: 'POST',
-      body: JSON.stringify({ audioBase64, voice, model, systemPrompt })
+      body: JSON.stringify({ audioBase64, text, voice, model, systemPrompt })
     });
   }
 };

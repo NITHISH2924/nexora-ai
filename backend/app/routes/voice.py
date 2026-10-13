@@ -108,31 +108,33 @@ async def voice_pipeline(
 ):
     """
     Full Voice-to-Voice Pipeline:
-    Speech Audio In → Speech-to-Text → NEXORA AI Reasoning → Text-to-Speech Audio Out.
+    Speech Audio or Direct Spoken Text In → Safe PC Task Parser / AI Reasoning → Text-to-Speech Audio Out.
     """
     user_id = current_user["userId"]
-    if not req.audioBase64:
+    if not req.audioBase64 and not req.text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="audioBase64 payload is required for voice pipeline."
+            detail="Either audioBase64 or text payload is required for voice pipeline."
         )
 
-    b64 = req.audioBase64
-    if "base64," in b64:
-        b64 = b64.split("base64,")[1]
-
-    try:
-        audio_bytes = base64.b64decode(b64)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Base64 audio payload."
-        )
+    audio_bytes = b""
+    if req.audioBase64:
+        b64 = req.audioBase64
+        if "base64," in b64:
+            b64 = b64.split("base64,")[1]
+        try:
+            audio_bytes = base64.b64decode(b64)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Base64 audio payload."
+            )
 
     return await voice_service.execute_voice_pipeline(
         user_id=user_id,
-        audio_bytes=audio_bytes,
-        voice=req.voice or "alloy",
+        audio_bytes=audio_bytes if audio_bytes else None,
+        text_query=req.text,
+        voice=req.voice or "onyx",
         model=req.model,
         system_prompt=req.systemPrompt
     )

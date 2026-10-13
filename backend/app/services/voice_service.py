@@ -80,7 +80,10 @@ class VoiceService:
         )
 
         return {
+            "greeting": greeting_text,
             "greetingText": greeting_text,
+            "assistant": "NEXORA",
+            "status": "ready",
             "userName": first_name,
             "audioId": synth_res.audioId,
             "audioUrl": synth_res.audioUrl,
@@ -288,46 +291,161 @@ class VoiceService:
             audioBase64=b64_audio,
             format="wav",
             durationSeconds=duration,
-            provider=provider_used
+            provider=provider_used,
+            voice=req.voice or "onyx"
         )
+
+    def evaluate_pc_task(self, query: str) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """
+        Safe permission-based intent parser for PC voice assistant.
+        Handles: time, date, web search, allowed website launches,
+        and enforces security boundaries preventing unauthorized local command execution.
+        """
+        import re
+        import urllib.parse
+        clean_q = query.strip().lower()
+
+        # 1. Time query
+        if any(p in clean_q for p in ["what time is it", "tell me the time", "current time", "what is the time", "what's the time"]):
+            now = datetime.now()
+            time_str = now.strftime("%I:%M %p")
+            return f"It is currently {time_str}.", {"type": "TIME_CHECK", "time": time_str}
+
+        # 2. Date query
+        if any(p in clean_q for p in ["what's today's date", "what is today's date", "tell me today's date", "today's date", "what day is it today", "what day is it"]):
+            now = datetime.now()
+            date_str = now.strftime("%A, %B %d, %Y")
+            return f"Today is {date_str}.", {"type": "DATE_CHECK", "date": date_str}
+
+        # 3. Web Search
+        search_match = re.search(r'\b(?:search\s+(?:for\s+|the\s+web\s+for\s+)?|google\s+|look\s+up\s+)(.+)$', clean_q)
+        if search_match:
+            search_term = search_match.group(1).strip()
+            # Clean trailing words like "on the web" or "online"
+            search_term = re.sub(r'\s+on\s+the\s+web$', '', search_term, flags=re.IGNORECASE).strip()
+            if search_term:
+                encoded = urllib.parse.quote_plus(search_term)
+                url = f"https://www.google.com/search?q={encoded}"
+                return f"Searching the web for '{search_term}'.", {
+                    "type": "WEB_SEARCH",
+                    "query": search_term,
+                    "url": url
+                }
+
+        # 4. Open Allowed Websites (Safe Allowlist)
+        allowed_sites = {
+            "youtube": ("YouTube", "https://www.youtube.com"),
+            "github": ("GitHub", "https://www.github.com"),
+            "google": ("Google", "https://www.google.com"),
+            "gmail": ("Gmail", "https://mail.google.com"),
+            "wikipedia": ("Wikipedia", "https://www.wikipedia.org"),
+            "leetcode": ("LeetCode", "https://leetcode.com"),
+            "stack overflow": ("Stack Overflow", "https://stackoverflow.com"),
+            "stackoverflow": ("Stack Overflow", "https://stackoverflow.com"),
+            "linkedin": ("LinkedIn", "https://www.linkedin.com"),
+        }
+        for site_key, (site_name, site_url) in allowed_sites.items():
+            if re.search(rf'\b(?:open|launch|go\s+to)\s+{re.escape(site_key)}\b', clean_q):
+                return f"Opening {site_name}.", {
+                    "type": "OPEN_URL",
+                    "url": site_url,
+                    "target": site_url,
+                    "siteName": site_name,
+                    "label": site_name
+                }
+
+        # 5. Windows Desktop Automation & OS command security boundary
+        restricted_system_actions = [
+            "open notepad", "open calc", "open calculator", "open cmd", "open command prompt",
+            "open terminal", "run powershell", "delete file", "install software", "shutdown pc",
+            "restart pc", "reboot pc", "format drive", "kill process", "cmd.exe", "powershell"
+        ]
+        if any(act in clean_q for act in restricted_system_actions) or re.search(r'\b(?:delete|format|rmdir|del)\s+', clean_q):
+            msg = "For Windows security and user permission boundaries, a web application running in a browser sandbox cannot directly execute native desktop applications or modify files on your computer. An authenticated local PC companion service is required for native desktop automation."
+            return (
+                msg,
+                {
+                    "type": "SECURITY_NOTICE",
+                    "detail": "DESKTOP_AUTOMATION_BOUNDARY",
+                    "message": msg
+                }
+            )
+
+        # 6. Assistant Identity
+        if any(p in clean_q for p in ["who are you", "what is your name", "who created you"]):
+            return (
+                "I am NEXORA AI, your conversational PC assistant. I can answer questions, search the web, check the time, open allowed websites, and assist with coding and research. Say 'Hey NEXORA' or click the microphone orb to speak.",
+                {"type": "IDENTITY"}
+            )
+
+        # 7. System Health / Status
+        if any(p in clean_q for p in ["system status", "system health", "health check"]):
+            return (
+                "NEXORA AI systems are fully operational. Voice intelligence, secure sandbox execution, and persistent security defenses are active.",
+                {"type": "STATUS"}
+            )
+
+        return None
 
     async def execute_voice_pipeline(
         self,
         user_id: str,
-        audio_bytes: bytes,
-        voice: str = "alloy",
+        audio_bytes: Optional[bytes] = None,
+        text_query: Optional[str] = None,
+        voice: str = "onyx",
         model: Optional[str] = None,
         system_prompt: Optional[str] = None
     ) -> VoicePipelineResponse:
         """
         Full Voice-to-Voice Pipeline:
-        1. Speech-to-Text (Transcribe user audio prompt)
-        2. NEXORA AI Reasoning Engine (Generate AI response)
-        3. Text-to-Speech (Synthesize AI response into playable audio)
+        1. Speech-to-Text (Transcribe user audio prompt or accept direct text query)
+        2. Safe PC Task Evaluation (time, date, web search, safe URL open, boundary notices)
+        3. NEXORA AI Reasoning Engine (Generate AI response if not a static task)
+        4. Text-to-Speech (Synthesize response into playable audio)
         """
-        # Step 1: Transcribe user speech
-        stt_res = await self.transcribe_audio(audio_bytes)
-        user_query = stt_res.transcript
+        if text_query and text_query.strip():
+            user_query = text_query.strip()
+        elif audio_bytes and len(audio_bytes) > 0:
+            stt_res = await self.transcribe_audio(audio_bytes)
+            user_query = stt_res.transcript
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either text_query or audio_bytes is required."
+            )
 
-        # Step 2: Query AI reasoning engine
-        sys_prompt = system_prompt or "You are NEXORA AI Voice Assistant. Provide concise, clear, and natural conversational answers."
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_query}
-        ]
+        # Step 2: Check for safe PC task intents
+        pc_task_result = self.evaluate_pc_task(user_query)
+        action_data = None
 
-        ai_response_text, model_used = await ai_manager.generate_response(
-            messages=messages,
-            model=model,
-            system_prompt=sys_prompt
-        )
+        if pc_task_result:
+            ai_response_text, action_data = pc_task_result
+            model_used = "nexora-pc-assistant"
+        else:
+            # Step 3: Query AI reasoning engine
+            sys_prompt = system_prompt or (
+                "You are NEXORA AI, a sophisticated, mature, and helpful PC voice assistant. "
+                "Respond clearly, concisely, and naturally. Keep answers brief (typically 1 to 3 sentences) "
+                "unless the user asks for a detailed explanation, making it ideal for spoken dialogue."
+            )
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_query}
+            ]
 
-        # Step 3: Synthesize AI text response into speech
+            ai_response_text, model_used = await ai_manager.generate_response(
+                messages=messages,
+                model=model,
+                system_prompt=sys_prompt
+            )
+
+        # Step 4: Synthesize text response into speech
+        selected_voice = voice if voice in self.SUPPORTED_VOICES else self.DEFAULT_VOICE
         tts_res = await self.synthesize_speech(
             user_id=user_id,
             req=VoiceSynthesizeRequest(
                 text=ai_response_text[:1000],
-                voice=voice,
+                voice=selected_voice,
                 speed=1.0,
                 model="tts-1"
             )
@@ -340,7 +458,8 @@ class VoiceService:
             audioUrl=tts_res.audioUrl,
             audioBase64=tts_res.audioBase64,
             durationSeconds=tts_res.durationSeconds,
-            model=model_used
+            model=model_used,
+            action=action_data
         )
 
     async def get_audio_file_path(self, user_id: str, audio_id: str) -> Path:
@@ -371,3 +490,5 @@ class VoiceService:
         )
 
 voice_service = VoiceService()
+evaluate_pc_task = voice_service.evaluate_pc_task
+

@@ -140,7 +140,9 @@ function switchWorkspaceView(viewId) {
   } else if (viewId === 'learning') {
     // Learning hub view ready
   } else if (viewId === 'voice') {
-    // Voice room view ready
+    if (typeof initJarvisVoiceHud === 'function') {
+      initJarvisVoiceHud();
+    }
   }
 }
 
@@ -2142,7 +2144,7 @@ async function loadImageGenGallery() {
 }
 
 /* ==========================================================================
-   PHASE 5: VOICE INTELLIGENCE & SPEECH CONTROLLER
+   PHASE 5: JARVIS PC VOICE ASSISTANT & SPEECH CONTROLLER
    ========================================================================== */
 
 let voiceMediaRecorder = null;
@@ -2152,27 +2154,1007 @@ let voiceRecordingSeconds = 0;
 let voiceStream = null;
 let currentPlayingAudio = null;
 
+// JARVIS Assistant State Machine
+let jarvisVoiceState = 'idle'; // 'idle' | 'listening' | 'processing' | 'speaking' | 'paused' | 'error'
+let speechRecognitionInstance = null;
+let isSpeechRecognitionActive = false;
+let isContinuousWakeWordActive = false;
+let isAssistantSpeaking = false;
+let isVoiceProcessing = false;
+let isAudioMuted = false;
+let isWakeWordPaused = false;
+let lastAssistantResponseText = '';
+let availableBrowserVoices = [];
+let selectedVoiceURI = 'auto';
+let voicePitch = 0.95;
+let voiceRate = 1.0;
+let voiceVolume = 1.0;
+let voiceEngine = 'browser'; // 'browser' | 'backend'
+let voiceLang = 'en-IN';
+let waveformCanvasAnimId = null;
+let lastWakeActivationTime = 0;
+
+// Setup Phase 5 Voice Assistant Workspace & Chat Mic Fallback
 function setupVoiceWorkspace() {
+  loadSavedVoiceSettings();
+  initVoiceSettingsUI();
+  initVoiceVoicesList();
+  setupLegacyChatVoiceRecordModal();
+  setupKeyboardHotkeys();
+
+  // If voices not yet loaded, wait for event
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      initVoiceVoicesList();
+    };
+  }
+}
+
+// --------------------------------------------------------------------------
+// 1. Settings & Persistence
+// --------------------------------------------------------------------------
+function loadSavedVoiceSettings() {
+  try {
+    const raw = localStorage.getItem('nexora_pc_voice_settings');
+    if (raw) {
+      const cfg = JSON.parse(raw);
+      if (cfg.voiceURI) selectedVoiceURI = cfg.voiceURI;
+      if (cfg.pitch !== undefined) voicePitch = parseFloat(cfg.pitch);
+      if (cfg.rate !== undefined) voiceRate = parseFloat(cfg.rate);
+      if (cfg.volume !== undefined) voiceVolume = parseFloat(cfg.volume);
+      if (cfg.engine) voiceEngine = cfg.engine;
+      if (cfg.lang) voiceLang = cfg.lang;
+      if (cfg.continuousWakeWord !== undefined) isContinuousWakeWordActive = !!cfg.continuousWakeWord;
+    }
+  } catch (e) {
+    console.warn('[VoiceSettings] Could not parse stored voice settings:', e);
+  }
+}
+
+function saveVoiceSettings() {
+  const voiceSelect = document.getElementById('setting-voice-select');
+  const engineSelect = document.getElementById('setting-voice-engine');
+  const langSelect = document.getElementById('setting-voice-lang');
+  const pitchRange = document.getElementById('setting-voice-pitch');
+  const rateRange = document.getElementById('setting-voice-rate');
+  const volumeRange = document.getElementById('setting-voice-volume');
+
+  if (voiceSelect) selectedVoiceURI = voiceSelect.value;
+  if (engineSelect) voiceEngine = engineSelect.value;
+  if (langSelect) voiceLang = langSelect.value;
+  if (pitchRange) voicePitch = parseFloat(pitchRange.value);
+  if (rateRange) voiceRate = parseFloat(rateRange.value);
+  if (volumeRange) voiceVolume = parseFloat(volumeRange.value) / 100.0;
+
+  const cfg = {
+    voiceURI: selectedVoiceURI,
+    engine: voiceEngine,
+    lang: voiceLang,
+    pitch: voicePitch,
+    rate: voiceRate,
+    volume: voiceVolume,
+    continuousWakeWord: isContinuousWakeWordActive
+  };
+
+  try {
+    localStorage.setItem('nexora_pc_voice_settings', JSON.stringify(cfg));
+    window.showToast('PC voice settings saved.', 'success', 2000);
+  } catch (e) {
+    console.error('[VoiceSettings] Storage save failed:', e);
+  }
+
+  updateActivePersonaBadge();
+  closeVoiceSettingsModal();
+
+  // If recognition language changed, reinitialize recognition
+  if (speechRecognitionInstance) {
+    speechRecognitionInstance.lang = voiceLang;
+  }
+}
+
+function initVoiceSettingsUI() {
+  const engineSelect = document.getElementById('setting-voice-engine');
+  const langSelect = document.getElementById('setting-voice-lang');
+  const pitchRange = document.getElementById('setting-voice-pitch');
+  const rateRange = document.getElementById('setting-voice-rate');
+  const volumeRange = document.getElementById('setting-voice-volume');
+  const pitchVal = document.getElementById('setting-voice-pitch-val');
+  const rateVal = document.getElementById('setting-voice-rate-val');
+  const volumeVal = document.getElementById('setting-voice-volume-val');
+  const wakeWordChk = document.getElementById('chk-continuous-wake-word');
+
+  if (engineSelect) engineSelect.value = voiceEngine;
+  if (langSelect) langSelect.value = voiceLang;
+  if (pitchRange) {
+    pitchRange.value = voicePitch;
+    if (pitchVal) pitchVal.innerText = `${voicePitch} (${voicePitch < 1.0 ? 'Deep Male' : 'Standard'})`;
+    pitchRange.oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      if (pitchVal) pitchVal.innerText = `${v} (${v < 1.0 ? 'Deep Male' : 'Standard'})`;
+    };
+  }
+  if (rateRange) {
+    rateRange.value = voiceRate;
+    if (rateVal) rateVal.innerText = `${voiceRate}x`;
+    rateRange.oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      if (rateVal) rateVal.innerText = `${v}x`;
+    };
+  }
+  if (volumeRange) {
+    const pct = Math.round(voiceVolume * 100);
+    volumeRange.value = pct;
+    if (volumeVal) volumeVal.innerText = `${pct}%`;
+    volumeRange.oninput = (e) => {
+      if (volumeVal) volumeVal.innerText = `${e.target.value}%`;
+    };
+  }
+  if (wakeWordChk) {
+    wakeWordChk.checked = isContinuousWakeWordActive;
+  }
+}
+
+function initVoiceVoicesList() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  availableBrowserVoices = window.speechSynthesis.getVoices();
+  const select = document.getElementById('setting-voice-select');
+  if (!select) return;
+
+  select.innerHTML = '';
+
+  // 1. Auto option
+  const autoOpt = document.createElement('option');
+  autoOpt.value = 'auto';
+  autoOpt.text = 'Auto-Detect Indian English Male (Microsoft Ravi / System Voice)';
+  select.appendChild(autoOpt);
+
+  if (!availableBrowserVoices || availableBrowserVoices.length === 0) {
+    updateActivePersonaBadge();
+    return;
+  }
+
+  // Filter English voices
+  const enVoices = availableBrowserVoices.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
+  const otherVoices = availableBrowserVoices.filter(v => !(v.lang || '').toLowerCase().startsWith('en'));
+
+  // Prioritize Indian English voices and Male voices
+  const sorted = [...enVoices, ...otherVoices];
+
+  sorted.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.voiceURI;
+    const isIndian = (v.lang || '').toLowerCase().includes('in') || v.name.toLowerCase().includes('india') || v.name.toLowerCase().includes('ravi');
+    const isMale = v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('ravi') || v.name.toLowerCase().includes('mark') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('george');
+    
+    let label = `${v.name} (${v.lang})`;
+    if (isIndian && isMale) label += ' 🌟 [Indian Male]';
+    else if (isIndian) label += ' 🇮🇳 [Indian English]';
+    else if (isMale) label += ' 🎙️ [Male Persona]';
+
+    opt.text = label;
+    if (v.voiceURI === selectedVoiceURI) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  updateActivePersonaBadge();
+}
+
+function updateActivePersonaBadge() {
+  const badge = document.getElementById('voice-active-persona-name');
+  if (!badge) return;
+
+  if (voiceEngine === 'backend') {
+    badge.innerText = 'Neural Onyx (Deep Adult Male)';
+    return;
+  }
+
+  if (selectedVoiceURI === 'auto') {
+    const best = findBestBrowserMaleVoice();
+    badge.innerText = best ? `${best.name} (Tuned Deep Male)` : 'System Male Persona (0.95)';
+  } else {
+    const chosen = availableBrowserVoices.find(v => v.voiceURI === selectedVoiceURI);
+    badge.innerText = chosen ? chosen.name : 'Configured Voice';
+  }
+}
+
+function findBestBrowserMaleVoice() {
+  if (!availableBrowserVoices || availableBrowserVoices.length === 0) {
+    if ('speechSynthesis' in window) availableBrowserVoices = window.speechSynthesis.getVoices();
+  }
+  if (!availableBrowserVoices || availableBrowserVoices.length === 0) return null;
+
+  // 1. Indian English Male (e.g. Microsoft Ravi)
+  const indianMale = availableBrowserVoices.find(v => {
+    const n = v.name.toLowerCase();
+    const l = (v.lang || '').toLowerCase();
+    return (l.includes('in') || n.includes('india')) && (n.includes('ravi') || n.includes('male') || n.includes('hemant'));
+  });
+  if (indianMale) return indianMale;
+
+  // 2. Any Indian English Voice
+  const indianEn = availableBrowserVoices.find(v => (v.lang || '').toLowerCase().includes('en-in') || v.name.toLowerCase().includes('india'));
+  if (indianEn) return indianEn;
+
+  // 3. Known Windows male voices (Microsoft Mark, Microsoft David, Microsoft George)
+  const winMale = availableBrowserVoices.find(v => {
+    const n = v.name.toLowerCase();
+    return n.includes('ravi') || n.includes('mark') || n.includes('david') || n.includes('george') || n.includes('male');
+  });
+  if (winMale) return winMale;
+
+  // 4. Default English voice
+  const defaultEn = availableBrowserVoices.find(v => (v.lang || '').toLowerCase().startsWith('en'));
+  return defaultEn || availableBrowserVoices[0];
+}
+
+// --------------------------------------------------------------------------
+// 2. JARVIS Assistant State Machine & HUD UI
+// --------------------------------------------------------------------------
+function updateJarvisStatus(state, customMessage = null) {
+  jarvisVoiceState = state;
+  const badge = document.getElementById('voice-room-status-badge');
+  const textEl = document.getElementById('voice-status-text');
+  const orbContainer = document.querySelector('.jarvis-orb-container');
+  const btnToggleLabel = document.getElementById('btn-voice-toggle-label');
+  const btnInterrupt = document.getElementById('btn-voice-interrupt');
+  const btnPauseLabel = document.getElementById('btn-voice-pause-label');
+
+  if (badge) {
+    badge.className = `jarvis-status-badge state-${state}`;
+  }
+  if (orbContainer) {
+    orbContainer.className = `jarvis-orb-container state-${state}`;
+  }
+
+  let defaultMsg = 'Ready — Say "Hey NEXORA" or click Orb to speak';
+  if (state === 'listening') {
+    defaultMsg = 'Listening... Speak your command or query';
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Stop Listening';
+  } else if (state === 'processing') {
+    defaultMsg = 'Processing intelligence request & PC task...';
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Processing...';
+  } else if (state === 'speaking') {
+    defaultMsg = 'NEXORA Speaking... Press Esc or Stop to cut off';
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Start Listening';
+  } else if (state === 'paused') {
+    defaultMsg = 'Voice Assistant Paused. Click Resume Listening';
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Start Listening';
+  } else if (state === 'error') {
+    defaultMsg = 'Error encountered. Check microphone or connection.';
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Start Listening';
+  } else {
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Start Listening';
+  }
+
+  if (textEl) {
+    textEl.innerText = customMessage || defaultMsg;
+  }
+
+  if (btnInterrupt) {
+    btnInterrupt.style.display = (state === 'speaking') ? 'inline-flex' : 'none';
+  }
+
+  if (btnPauseLabel) {
+    btnPauseLabel.innerText = isWakeWordPaused ? 'Resume Listening' : 'Pause Listening';
+  }
+
+  // Floating trigger indicator
+  const floatingText = document.getElementById('floating-voice-text');
+  if (floatingText) {
+    floatingText.innerText = customMessage || defaultMsg;
+  }
+}
+
+// --------------------------------------------------------------------------
+// 3. Speech Recognition Engine (Web Speech API)
+// --------------------------------------------------------------------------
+function getSpeechRecognitionConstructor() {
+  if (typeof window === 'undefined') return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function initSpeechRecognition() {
+  const SpeechRec = getSpeechRecognitionConstructor();
+  if (!SpeechRec) {
+    console.warn('[SpeechRec] SpeechRecognition API not supported in this browser.');
+    return null;
+  }
+
+  if (speechRecognitionInstance) return speechRecognitionInstance;
+
+  try {
+    const rec = new SpeechRec();
+    rec.continuous = isContinuousWakeWordActive;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.lang = voiceLang || 'en-IN';
+
+    rec.onstart = () => {
+      isSpeechRecognitionActive = true;
+      if (!isAssistantSpeaking && !isVoiceProcessing && !isWakeWordPaused) {
+        updateJarvisStatus('listening');
+      }
+    };
+
+    rec.onresult = (event) => {
+      handleSpeechRecognitionResult(event);
+    };
+
+    rec.onerror = (event) => {
+      handleSpeechRecognitionError(event);
+    };
+
+    rec.onend = () => {
+      isSpeechRecognitionActive = false;
+      // Auto-restart if continuous wake word enabled and not explicitly stopped or speaking
+      if (isContinuousWakeWordActive && !isWakeWordPaused && !isAssistantSpeaking && !isVoiceProcessing) {
+        setTimeout(() => {
+          if (isContinuousWakeWordActive && !isSpeechRecognitionActive && !isAssistantSpeaking) {
+            try {
+              rec.start();
+            } catch (e) {
+              // Ignore already started errors
+            }
+          }
+        }, 300);
+      } else if (!isAssistantSpeaking && !isVoiceProcessing && jarvisVoiceState === 'listening') {
+        updateJarvisStatus('idle');
+      }
+    };
+
+    speechRecognitionInstance = rec;
+    return rec;
+  } catch (err) {
+    console.error('[SpeechRec] Initialization failed:', err);
+    return null;
+  }
+}
+
+function handleSpeechRecognitionResult(event) {
+  if (isAssistantSpeaking || isVoiceProcessing || isWakeWordPaused) {
+    // Ignore incoming audio while NEXORA is speaking or processing to prevent feedback loops
+    return;
+  }
+
+  let interimTranscript = '';
+  let finalTranscript = '';
+
+  for (let i = event.resultIndex; i < event.results.length; ++i) {
+    const res = event.results[i];
+    const text = res[0].transcript;
+    if (res.isFinal) {
+      finalTranscript += text;
+    } else {
+      interimTranscript += text;
+    }
+  }
+
+  const liveText = (finalTranscript || interimTranscript).trim();
+  const transcriptCard = document.getElementById('voice-user-transcript');
+  const interimBadge = document.getElementById('voice-recognition-interim-badge');
+
+  if (transcriptCard && liveText) {
+    transcriptCard.innerText = liveText;
+    if (interimBadge) interimBadge.style.display = finalTranscript ? 'none' : 'inline-block';
+  }
+
+  const normalized = liveText.toLowerCase();
+
+  // Check for wake word: "hey nexora", "nexora", "ok nexora"
+  const wakeWordMatches = ['hey nexora', 'ok nexora', 'hello nexora', 'nexora'];
+  let detectedWakeWord = false;
+  let commandText = '';
+
+  for (const phrase of wakeWordMatches) {
+    const idx = normalized.indexOf(phrase);
+    if (idx !== -1) {
+      detectedWakeWord = true;
+      commandText = normalized.substring(idx + phrase.length).trim();
+      break;
+    }
+  }
+
+  // Debounce wake activation
+  const now = Date.now();
+  if (detectedWakeWord) {
+    if (now - lastWakeActivationTime < 1500) {
+      return; // Debounce rapid repeat activations
+    }
+    lastWakeActivationTime = now;
+  }
+
+  if (finalTranscript.trim()) {
+    let cleanQuery = finalTranscript.trim();
+    // Strip wake word prefix if present
+    if (detectedWakeWord && commandText) {
+      cleanQuery = commandText;
+    } else if (detectedWakeWord && !commandText) {
+      // Just wake word spoken: greet the user
+      executeWakeWordGreeting();
+      return;
+    }
+
+    if (cleanQuery.length > 1) {
+      sendVoiceQueryToPipeline(cleanQuery);
+    }
+  }
+}
+
+function handleSpeechRecognitionError(event) {
+  console.warn('[SpeechRec] Recognition event error:', event.error);
+  if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+    openMicPermissionModal();
+    updateJarvisStatus('error', 'Microphone permission denied. Click to grant access.');
+  } else if (event.error === 'no-speech') {
+    // Normal timeout when no speech is detected; silently ignore
+    if (!isContinuousWakeWordActive && jarvisVoiceState === 'listening') {
+      updateJarvisStatus('idle');
+    }
+  } else if (event.error === 'network') {
+    window.showToast('Speech recognition network timeout. Retrying...', 'warning', 2500);
+  } else {
+    updateJarvisStatus('idle');
+  }
+}
+
+// --------------------------------------------------------------------------
+// 4. Voice Pipeline Execution & Safe PC Tasks
+// --------------------------------------------------------------------------
+async function sendVoiceQueryToPipeline(query) {
+  if (!query || isVoiceProcessing) return;
+
+  isVoiceProcessing = true;
+  updateJarvisStatus('processing', `Processing: "${query.substring(0, 40)}..."`);
+
+  const transcriptCard = document.getElementById('voice-user-transcript');
+  if (transcriptCard) transcriptCard.innerText = query;
+
+  try {
+    const payload = {
+      text: query,
+      voice: 'onyx',
+      model: 'default'
+    };
+
+    const res = await window.voiceApi.pipeline(payload);
+    const replyText = res.text || 'Command acknowledged, sir.';
+    lastAssistantResponseText = replyText;
+
+    // 1. Update Assistant Response Card
+    const responseCard = document.getElementById('voice-assistant-response');
+    if (responseCard) {
+      responseCard.innerText = replyText;
+    }
+
+    // 2. Render Verified Safe PC Task Card if action present
+    handleSafePcTaskAction(res.action, query);
+
+    // 3. Show Replay Button
+    const replayBtn = document.getElementById('btn-voice-replay');
+    if (replayBtn) replayBtn.style.display = 'inline-flex';
+
+    // 4. Speak Assistant Reply in natural Indian-English Male Voice
+    isVoiceProcessing = false;
+    await speakAssistantResponse(replyText);
+
+  } catch (err) {
+    isVoiceProcessing = false;
+    console.error('[VoicePipeline] Error executing voice query:', err);
+    updateJarvisStatus('error', `Failed: ${err.message}`);
+    window.showToast(`Voice assistant error: ${err.message}`, 'error', 3500);
+  }
+}
+
+function handleSafePcTaskAction(action, originalQuery) {
+  const taskCard = document.getElementById('voice-task-card');
+  const taskIcon = document.getElementById('voice-task-icon');
+  const taskTitle = document.getElementById('voice-task-title');
+  const taskDetail = document.getElementById('voice-task-detail');
+  const actionBtnContainer = document.getElementById('voice-task-action-btn-container');
+
+  if (!taskCard || !action) {
+    if (taskCard) taskCard.style.display = 'none';
+    return;
+  }
+
+  taskCard.style.display = 'block';
+  actionBtnContainer.innerHTML = '';
+
+  const type = action.type;
+
+  if (type === 'TIME_CHECK') {
+    taskIcon.innerText = '🕒';
+    taskTitle.innerText = 'Windows PC Time Check';
+    taskDetail.innerText = `Current Time: ${action.time || new Date().toLocaleTimeString()}`;
+  } else if (type === 'DATE_CHECK') {
+    taskIcon.innerText = '📅';
+    taskTitle.innerText = 'Current Date';
+    taskDetail.innerText = action.date || new Date().toLocaleDateString();
+  } else if (type === 'WEB_SEARCH') {
+    taskIcon.innerText = '🔍';
+    taskTitle.innerText = `Web Search: "${action.query}"`;
+    taskDetail.innerText = 'Click below to launch search in a new secure tab.';
+    const searchBtn = document.createElement('a');
+    searchBtn.href = action.url;
+    searchBtn.target = '_blank';
+    searchBtn.rel = 'noopener noreferrer';
+    searchBtn.className = 'btn btn-primary btn-sm';
+    searchBtn.style.fontSize = '12px';
+    searchBtn.style.padding = '4px 12px';
+    searchBtn.innerText = 'Open Search';
+    actionBtnContainer.appendChild(searchBtn);
+  } else if (type === 'OPEN_URL') {
+    taskIcon.innerText = '🌐';
+    taskTitle.innerText = `Launch Site: ${action.siteName || 'Permitted Website'}`;
+    taskDetail.innerText = `Verified secure URL: ${action.url}`;
+    const launchBtn = document.createElement('a');
+    launchBtn.href = action.url;
+    launchBtn.target = '_blank';
+    launchBtn.rel = 'noopener noreferrer';
+    launchBtn.className = 'btn btn-primary btn-sm';
+    launchBtn.style.fontSize = '12px';
+    launchBtn.style.padding = '4px 12px';
+    launchBtn.innerText = `Open ${action.siteName || 'Site'}`;
+    actionBtnContainer.appendChild(launchBtn);
+  } else if (type === 'SECURITY_NOTICE') {
+    taskIcon.innerText = '🛡️';
+    taskTitle.innerText = 'Security Sandbox Boundary';
+    taskDetail.innerText = action.message || 'Direct Windows file or executable execution restricted without local companion.';
+  } else {
+    taskCard.style.display = 'none';
+  }
+}
+
+// --------------------------------------------------------------------------
+// 5. Speech Audio Synthesis & Playback
+// --------------------------------------------------------------------------
+async function speakAssistantResponse(rawText) {
+  if (isAudioMuted || !rawText) {
+    updateJarvisStatus('idle');
+    return;
+  }
+
+  stopSpeechAudio(); // Cut off any existing audio immediately
+
+  isAssistantSpeaking = true;
+  updateJarvisStatus('speaking');
+  startWaveformVisualizer();
+
+  const cleanText = rawText.replace(/```[\s\S]*?```/g, 'Code block omitted for speech.')
+                           .replace(/[#*`_~\[\]]/g, '')
+                           .replace(/https?:\/\/\S+/g, '')
+                           .trim();
+
+  // If backend engine selected, use backend neural TTS (onyx)
+  if (voiceEngine === 'backend') {
+    try {
+      const res = await window.voiceApi.synthesize({
+        text: cleanText.substring(0, 900),
+        voice: 'onyx',
+        speed: voiceRate,
+        pitch: voicePitch
+      });
+
+      if (res && res.audioUrl) {
+        const audio = new Audio(res.audioUrl);
+        currentPlayingAudio = audio;
+        audio.volume = voiceVolume;
+
+        audio.onended = () => {
+          isAssistantSpeaking = false;
+          currentPlayingAudio = null;
+          stopWaveformVisualizer();
+          updateJarvisStatus('idle');
+        };
+
+        audio.onerror = (e) => {
+          console.warn('[AudioBackend] Neural playback error, falling back to browser voice:', e);
+          isAssistantSpeaking = false;
+          currentPlayingAudio = null;
+          stopWaveformVisualizer();
+          speakWithBrowserVoice(cleanText);
+        };
+
+        await audio.play();
+        return;
+      }
+    } catch (err) {
+      console.warn('[AudioBackend] Backend TTS unavailable, using browser speech:', err);
+    }
+  }
+
+  // Browser Web Speech API Synthesis
+  speakWithBrowserVoice(cleanText);
+}
+
+function speakWithBrowserVoice(cleanText) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    isAssistantSpeaking = false;
+    stopWaveformVisualizer();
+    updateJarvisStatus('idle');
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(cleanText.substring(0, 900));
+  utterance.pitch = voicePitch; // Default 0.95 gives mature deep male resonance
+  utterance.rate = voiceRate;
+  utterance.volume = voiceVolume;
+
+  let chosenVoice = null;
+  if (selectedVoiceURI && selectedVoiceURI !== 'auto') {
+    chosenVoice = availableBrowserVoices.find(v => v.voiceURI === selectedVoiceURI);
+  }
+  if (!chosenVoice) {
+    chosenVoice = findBestBrowserMaleVoice();
+  }
+
+  if (chosenVoice) {
+    utterance.voice = chosenVoice;
+    utterance.lang = chosenVoice.lang || voiceLang || 'en-IN';
+  }
+
+  utterance.onend = () => {
+    isAssistantSpeaking = false;
+    stopWaveformVisualizer();
+    updateJarvisStatus('idle');
+  };
+
+  utterance.onerror = (e) => {
+    console.warn('[SpeechSynthesis] Playback error/cancelled:', e);
+    isAssistantSpeaking = false;
+    stopWaveformVisualizer();
+    updateJarvisStatus('idle');
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeechAudio() {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  if (currentPlayingAudio) {
+    currentPlayingAudio.pause();
+    currentPlayingAudio = null;
+  }
+  isAssistantSpeaking = false;
+  isVoiceProcessing = false;
+  stopWaveformVisualizer();
+  updateJarvisStatus('idle');
+}
+
+function replayLastAssistantSpeech() {
+  if (lastAssistantResponseText) {
+    speakAssistantResponse(lastAssistantResponseText);
+  } else {
+    window.showToast('No previous response to replay.', 'info', 2000);
+  }
+}
+
+function toggleMuteAudio() {
+  isAudioMuted = !isAudioMuted;
+  const iconUnmuted = document.getElementById('icon-voice-unmuted');
+  const iconMuted = document.getElementById('icon-voice-muted');
+  const muteLabel = document.getElementById('btn-voice-mute-label');
+
+  if (isAudioMuted) {
+    stopSpeechAudio();
+    if (iconUnmuted) iconUnmuted.style.display = 'none';
+    if (iconMuted) iconMuted.style.display = 'inline';
+    if (muteLabel) muteLabel.innerText = 'Unmute Output';
+    window.showToast('Speech audio muted.', 'info', 1500);
+  } else {
+    if (iconUnmuted) iconUnmuted.style.display = 'inline';
+    if (iconMuted) iconMuted.style.display = 'none';
+    if (muteLabel) muteLabel.innerText = 'Mute Output';
+    window.showToast('Speech audio unmuted.', 'success', 1500);
+  }
+}
+
+// --------------------------------------------------------------------------
+// 6. Voice Listening Toggles & Wake Word Handlers
+// --------------------------------------------------------------------------
+function toggleVoiceListening() {
+  const rec = initSpeechRecognition();
+  if (!rec) {
+    window.showToast('Speech recognition not available. Please use Google Chrome or Microsoft Edge on Windows.', 'error', 4000);
+    return;
+  }
+
+  if (isAssistantSpeaking) {
+    stopSpeechAudio();
+    return;
+  }
+
+  if (isSpeechRecognitionActive) {
+    try {
+      rec.stop();
+    } catch (e) {}
+    isSpeechRecognitionActive = false;
+    updateJarvisStatus('idle');
+  } else {
+    try {
+      rec.start();
+      updateJarvisStatus('listening');
+    } catch (e) {
+      console.warn('[SpeechRec] Could not start speech recognition:', e);
+    }
+  }
+}
+
+function togglePauseListening() {
+  isWakeWordPaused = !isWakeWordPaused;
+  if (isWakeWordPaused) {
+    if (speechRecognitionInstance && isSpeechRecognitionActive) {
+      try { speechRecognitionInstance.stop(); } catch (e) {}
+    }
+    updateJarvisStatus('paused', 'Voice listening paused.');
+    window.showToast('Voice listening paused.', 'info', 1500);
+  } else {
+    updateJarvisStatus('idle');
+    if (isContinuousWakeWordActive) {
+      const rec = initSpeechRecognition();
+      if (rec) {
+        try { rec.start(); } catch (e) {}
+      }
+    }
+    window.showToast('Voice listening resumed.', 'success', 1500);
+  }
+}
+
+function toggleWakeWordListener(enabled) {
+  isContinuousWakeWordActive = !!enabled;
+  const cfg = { continuousWakeWord: isContinuousWakeWordActive };
+  try {
+    const raw = localStorage.getItem('nexora_pc_voice_settings');
+    const existing = raw ? JSON.parse(raw) : {};
+    localStorage.setItem('nexora_pc_voice_settings', JSON.stringify({ ...existing, ...cfg }));
+  } catch (e) {}
+
+  if (speechRecognitionInstance) {
+    try { speechRecognitionInstance.stop(); } catch (e) {}
+    speechRecognitionInstance = null; // Re-create with new continuous flag
+  }
+
+  if (isContinuousWakeWordActive) {
+    const rec = initSpeechRecognition();
+    if (rec) {
+      try { rec.start(); } catch (e) {}
+    }
+    window.showToast('Continuous "Hey NEXORA" wake phrase enabled.', 'success', 2500);
+  } else {
+    updateJarvisStatus('idle');
+    window.showToast('Wake phrase continuous mode disabled. Use Orb button or Space.', 'info', 2500);
+  }
+}
+
+async function handleWakeGreeting() {
+  try {
+    const res = await window.voiceApi.wakeGreet();
+    const greetText = res.greeting || 'Greetings sir, NEXORA online and ready.';
+    lastAssistantResponseText = greetText;
+    const responseCard = document.getElementById('voice-assistant-response');
+    if (responseCard) responseCard.innerText = greetText;
+    await speakAssistantResponse(greetText);
+  } catch (e) {
+    speakAssistantResponse('Greetings sir. NEXORA assistant is online and ready for your commands.');
+  }
+}
+
+async function executeWakeWordGreeting() {
+  window.showToast('🎙️ "Hey NEXORA" detected! Listening to your command...', 'info', 2000);
+  const greetText = 'Yes sir, I am listening.';
+  const responseCard = document.getElementById('voice-assistant-response');
+  if (responseCard) responseCard.innerText = greetText;
+  await speakAssistantResponse(greetText);
+}
+
+// --------------------------------------------------------------------------
+// 7. Holographic Waveform Visualizer Canvas
+// --------------------------------------------------------------------------
+function startWaveformVisualizer() {
+  const canvas = document.getElementById('voice-waveform-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  stopWaveformVisualizer();
+
+  let phase = 0;
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = 95;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = (jarvisVoiceState === 'speaking') ? 'rgba(167, 139, 250, 0.85)' : 'rgba(52, 211, 153, 0.85)';
+
+    for (let a = 0; a < Math.PI * 2; a += 0.05) {
+      const offset = Math.sin(a * 8 + phase) * (jarvisVoiceState === 'speaking' ? 8 : 4);
+      const r = radius + offset;
+      const x = centerX + Math.cos(a) * r;
+      const y = centerY + Math.sin(a) * r;
+      if (a === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+
+    phase += 0.12;
+    waveformCanvasAnimId = requestAnimationFrame(render);
+  }
+
+  render();
+}
+
+function stopWaveformVisualizer() {
+  if (waveformCanvasAnimId) {
+    cancelAnimationFrame(waveformCanvasAnimId);
+    waveformCanvasAnimId = null;
+  }
+  const canvas = document.getElementById('voice-waveform-canvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+// --------------------------------------------------------------------------
+// 8. Modals, Floating Widget & Hotkeys
+// --------------------------------------------------------------------------
+function openVoiceSettingsModal() {
+  const modal = document.getElementById('modal-voice-settings');
+  if (modal) modal.style.display = 'flex';
+  initVoiceSettingsUI();
+  initVoiceVoicesList();
+}
+
+function closeVoiceSettingsModal() {
+  const modal = document.getElementById('modal-voice-settings');
+  if (modal) modal.style.display = 'none';
+}
+
+function openMicPermissionModal() {
+  const modal = document.getElementById('modal-mic-permission');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeMicPermissionModal() {
+  const modal = document.getElementById('modal-mic-permission');
+  if (modal) modal.style.display = 'none';
+}
+
+async function requestMicrophoneAccessAgain() {
+  closeMicPermissionModal();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    window.showToast('Microphone access granted! Starting assistant...', 'success', 2500);
+    toggleVoiceListening();
+  } catch (err) {
+    window.showToast(`Microphone still blocked: ${err.message}`, 'error', 3500);
+  }
+}
+
+function testSelectedVoicePersona() {
+  const pitchRange = document.getElementById('setting-voice-pitch');
+  const rateRange = document.getElementById('setting-voice-rate');
+  const tempPitch = pitchRange ? parseFloat(pitchRange.value) : voicePitch;
+  const tempRate = rateRange ? parseFloat(rateRange.value) : voiceRate;
+
+  const testText = "Hello sir, I am NEXORA, your PC assistant. All systems operational.";
+
+  if (voiceEngine === 'backend') {
+    speakAssistantResponse(testText);
+    return;
+  }
+
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(testText);
+    utt.pitch = tempPitch;
+    utt.rate = tempRate;
+    utt.volume = voiceVolume;
+
+    const voiceSelect = document.getElementById('setting-voice-select');
+    const uri = voiceSelect ? voiceSelect.value : selectedVoiceURI;
+    let chosen = availableBrowserVoices.find(v => v.voiceURI === uri);
+    if (!chosen) chosen = findBestBrowserMaleVoice();
+    if (chosen) utt.voice = chosen;
+
+    window.speechSynthesis.speak(utt);
+  }
+}
+
+function copyAssistantResponse() {
+  const text = (lastAssistantResponseText || document.getElementById('voice-assistant-response')?.innerText || '').trim();
+  if (!text) {
+    window.showToast('No response text to copy.', 'info', 1500);
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    window.showToast('Assistant response copied to clipboard.', 'success', 1800);
+  }).catch(() => {
+    window.showToast('Could not copy to clipboard.', 'error');
+  });
+}
+
+function toggleFloatingVoiceCard(show) {
+  const card = document.getElementById('floating-voice-card');
+  if (!card) return;
+  card.style.display = show ? 'block' : 'none';
+}
+
+function toggleFloatingVoiceListening() {
+  const card = document.getElementById('floating-voice-card');
+  if (card) {
+    const isShowing = card.style.display !== 'none';
+    card.style.display = isShowing ? 'none' : 'block';
+  }
+  toggleVoiceListening();
+}
+
+function initJarvisVoiceHud() {
+  updateActivePersonaBadge();
+  if (isContinuousWakeWordActive && !isSpeechRecognitionActive && !isWakeWordPaused) {
+    const rec = initSpeechRecognition();
+    if (rec) {
+      try { rec.start(); } catch (e) {}
+    }
+  }
+}
+
+function setupKeyboardHotkeys() {
+  window.addEventListener('keydown', (e) => {
+    // 1. Escape key: Cut off any ongoing speech audio immediately
+    if (e.key === 'Escape') {
+      if (isAssistantSpeaking || currentPlayingAudio) {
+        stopSpeechAudio();
+        window.showToast('Speech output stopped.', 'info', 1200);
+      }
+      return;
+    }
+
+    // 2. Space key: Toggle voice listening when Voice HUD is active & no text input focused
+    if (e.code === 'Space' && !e.repeat) {
+      const activeEl = document.activeElement;
+      const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+      if (!isInput) {
+        const voiceView = document.getElementById('view-voice');
+        if (voiceView && voiceView.classList.contains('active')) {
+          e.preventDefault();
+          toggleVoiceListening();
+        }
+      }
+    }
+  });
+}
+
+// --------------------------------------------------------------------------
+// 9. Legacy Chat Voice Recording Modal Support (Preserve Existing Chat Mic)
+// --------------------------------------------------------------------------
+function setupLegacyChatVoiceRecordModal() {
   const voiceBtn = document.getElementById('btn-voice-input');
-  const voiceModal = document.getElementById('modal-voice-recording');
   const cancelBtn = document.getElementById('btn-cancel-voice-record');
   const finishBtn = document.getElementById('btn-finish-voice-record');
-  const timerEl = document.getElementById('voice-recording-timer');
-  const modalTitle = document.getElementById('voice-recording-modal-title');
-  const modalHint = document.getElementById('voice-recording-hint');
 
   if (voiceBtn) {
     voiceBtn.addEventListener('click', async () => {
       await startVoiceRecording();
     });
   }
-
   if (cancelBtn) {
     cancelBtn.addEventListener('click', () => {
       stopVoiceRecording(false);
     });
   }
-
   if (finishBtn) {
     finishBtn.addEventListener('click', async () => {
       await stopVoiceRecording(true);
@@ -2196,7 +3178,7 @@ async function startVoiceRecording() {
     voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      window.showToast('Microphone permission was denied. Please allow microphone access in your browser settings.', 'error', 4000);
+      openMicPermissionModal();
     } else {
       window.showToast(`Microphone error: ${err.message}`, 'error');
     }
@@ -2206,7 +3188,6 @@ async function startVoiceRecording() {
   voiceAudioChunks = [];
   voiceRecordingSeconds = 0;
 
-  // Detect supported mime type
   let mimeType = 'audio/webm';
   if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
     mimeType = 'audio/webm;codecs=opus';
@@ -2230,7 +3211,6 @@ async function startVoiceRecording() {
 
   voiceMediaRecorder.start(250);
 
-  // Show Modal & Start Timer
   if (voiceModal) voiceModal.style.display = 'flex';
   if (modalTitle) modalTitle.innerText = 'Listening to Your Voice...';
   if (modalHint) modalHint.innerText = 'Speak clearly into your microphone. Click Finish when done.';
@@ -2240,7 +3220,6 @@ async function startVoiceRecording() {
     finishBtn.innerHTML = '<span>⏹️ Finish & Transcribe</span>';
   }
 
-  // Animate recording timer
   clearInterval(voiceRecordingTimerInterval);
   voiceRecordingTimerInterval = setInterval(() => {
     voiceRecordingSeconds++;
@@ -2278,9 +3257,8 @@ async function stopVoiceRecording(shouldProcess = true) {
     finishBtn.innerHTML = '<div class="pulse-loader" style="width:14px;height:14px;border-width:2px;display:inline-block;margin-right:6px;"></div> Transcribing...';
   }
   if (modalTitle) modalTitle.innerText = 'Transcribing Voice Input...';
-  if (modalHint) modalHint.innerText = 'Processing acoustic speech with neural transcription models...';
+  if (modalHint) modalHint.innerText = 'Processing speech with transcription pipeline...';
 
-  // Wait briefly for recorder to flush final chunks
   await new Promise(r => setTimeout(r, 400));
 
   const audioBlob = new Blob(voiceAudioChunks, { type: voiceMediaRecorder ? voiceMediaRecorder.mimeType : 'audio/webm' });
@@ -2297,7 +3275,6 @@ async function stopVoiceRecording(shouldProcess = true) {
       return;
     }
 
-    // Populate chat textarea with transcription
     const chatTextarea = document.getElementById('chat-textarea');
     if (chatTextarea) {
       const existing = chatTextarea.value.trim();
@@ -2314,89 +3291,32 @@ async function stopVoiceRecording(shouldProcess = true) {
   }
 }
 
-// Text-to-Speech Playback Helper
+// Compatibility Play Speech Audio helper for read-aloud buttons in chat
 async function playSpeechAudio(text, btnEl = null) {
   if (!text) return;
-
-  // If already playing this, toggle stop
-  if (currentPlayingAudio && !currentPlayingAudio.paused) {
-    currentPlayingAudio.pause();
-    currentPlayingAudio = null;
-    if (btnEl) btnEl.classList.remove('playing');
-    return;
-  }
-
-  if (btnEl) {
-    btnEl.classList.add('playing');
-    btnEl.innerHTML = `
-      <div class="pulse-loader" style="width:10px;height:10px;border-width:1.5px;display:inline-block;margin-right:4px;"></div>
-      <span>Synthesizing...</span>
-    `;
-  }
-
-  try {
-    const cleanText = text.replace(/```[\s\S]*?```/g, 'Code block omitted for audio.')
-                          .replace(/[#*`_~\[\]]/g, '')
-                          .substring(0, 800);
-
-    const res = await window.voiceApi.synthesize({
-      text: cleanText,
-      voice: 'alloy',
-      speed: 1.0
-    });
-
-    if (res && res.audioUrl) {
-      const audio = new Audio(res.audioUrl);
-      currentPlayingAudio = audio;
-
-      if (btnEl) {
-        btnEl.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-          <span>Pause Voice</span>
-        `;
-      }
-
-      audio.onended = () => {
-        if (btnEl) {
-          btnEl.classList.remove('playing');
-          btnEl.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-            <span>Read Aloud</span>
-          `;
-        }
-        currentPlayingAudio = null;
-      };
-
-      await audio.play();
-    }
-  } catch (err) {
-    // Fallback to browser SpeechSynthesis API
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text.substring(0, 500));
-      utterance.onend = () => {
-        if (btnEl) {
-          btnEl.classList.remove('playing');
-          btnEl.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-            <span>Read Aloud</span>
-          `;
-        }
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      window.showToast(`Voice playback error: ${err.message}`, 'error');
-      if (btnEl) {
-        btnEl.classList.remove('playing');
-        btnEl.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-          <span>Read Aloud</span>
-        `;
-      }
-    }
-  }
+  await speakAssistantResponse(text);
 }
 
+// Window global bindings for inline HTML onclick handlers
 window.playSpeechAudio = playSpeechAudio;
+window.toggleVoiceListening = toggleVoiceListening;
+window.togglePauseListening = togglePauseListening;
+window.stopSpeechAudio = stopSpeechAudio;
+window.replayLastAssistantSpeech = replayLastAssistantSpeech;
+window.toggleMuteAudio = toggleMuteAudio;
+window.toggleWakeWordListener = toggleWakeWordListener;
+window.openVoiceSettingsModal = openVoiceSettingsModal;
+window.closeVoiceSettingsModal = closeVoiceSettingsModal;
+window.saveVoiceSettings = saveVoiceSettings;
+window.testSelectedVoicePersona = testSelectedVoicePersona;
+window.openMicPermissionModal = openMicPermissionModal;
+window.closeMicPermissionModal = closeMicPermissionModal;
+window.requestMicrophoneAccessAgain = requestMicrophoneAccessAgain;
+window.handleWakeGreeting = handleWakeGreeting;
+window.copyAssistantResponse = copyAssistantResponse;
+window.toggleFloatingVoiceCard = toggleFloatingVoiceCard;
+window.toggleFloatingVoiceListening = toggleFloatingVoiceListening;
+window.initJarvisVoiceHud = initJarvisVoiceHud;
 
 /* ==========================================================================
    PHASE 6: PROJECTS WORKSPACE & LONG-TERM ORGANIZATION CONTROLLER
