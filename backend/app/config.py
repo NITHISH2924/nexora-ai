@@ -22,6 +22,7 @@ class Settings:
 
     # Security
     JWT_SECRET: str = os.getenv("JWT_SECRET", "nexora_default_secret_key_change_in_production_2026")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", os.getenv("JWT_SECRET", "nexora_default_secret_key_change_in_production_2026"))
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")) # 24h
     SECURE_COOKIES: bool = os.getenv("SECURE_COOKIES", "false" if APP_ENV != "production" else "true").lower() in ("true", "1", "yes")
@@ -87,6 +88,10 @@ class Settings:
     ENABLE_CODE_EXECUTION: bool = os.getenv("ENABLE_CODE_EXECUTION", "true").lower() in ("true", "1", "yes")
     CODE_EXECUTION_TIMEOUT_SECONDS: float = float(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "4.0"))
     MAX_CODE_OUTPUT_BYTES: int = int(os.getenv("MAX_CODE_OUTPUT_BYTES", "65536")) # 64 KB safety buffer
+    MAX_CODE_INPUT_BYTES: int = int(os.getenv("MAX_CODE_INPUT_BYTES", "65536"))   # 64 KB input buffer limit
+    MAX_CONCURRENT_CODE_EXECUTIONS: int = int(os.getenv("MAX_CONCURRENT_CODE_EXECUTIONS", "4"))
+    CODE_SANDBOX_WORKER_URL: str = os.getenv("CODE_SANDBOX_WORKER_URL", "").strip()
+    REQUIRE_CONTAINER_SANDBOX_IN_PROD: bool = os.getenv("REQUIRE_CONTAINER_SANDBOX_IN_PROD", "true").lower() in ("true", "1", "yes")
 
     # Email
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "no-reply@nexora.ai")
