@@ -83,6 +83,11 @@ class Settings:
     RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "30"))
 
+    # Code Execution Sandbox Hardening
+    ENABLE_CODE_EXECUTION: bool = os.getenv("ENABLE_CODE_EXECUTION", "true").lower() in ("true", "1", "yes")
+    CODE_EXECUTION_TIMEOUT_SECONDS: float = float(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "4.0"))
+    MAX_CODE_OUTPUT_BYTES: int = int(os.getenv("MAX_CODE_OUTPUT_BYTES", "65536")) # 64 KB safety buffer
+
     # Email
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "no-reply@nexora.ai")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")

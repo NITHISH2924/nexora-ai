@@ -1,15 +1,113 @@
 import os
 import sys
 import time
-import subprocess
+import ast
+import tempfile
 import logging
-from typing import Optional, Dict, Any
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 import asyncio
 
+from backend.app.config import settings
 from backend.app.models import CodeAssistRequest, CodeAssistResponse, CodeExecutionRequest, CodeExecutionResponse
 from backend.app.services.ai_providers.manager import ai_manager
 
 logger = logging.getLogger("services.coding")
+
+def redact_sensitive_values(text: str) -> str:
+    """Scrub known application secrets and credentials from output strings."""
+    if not text:
+        return text
+    secrets_to_mask = [
+        getattr(settings, "JWT_SECRET", ""),
+        getattr(settings, "DATABASE_URL", ""),
+        getattr(settings, "GEMINI_API_KEY", ""),
+        getattr(settings, "OPENAI_API_KEY", ""),
+        getattr(settings, "ANTHROPIC_API_KEY", ""),
+        getattr(settings, "GROQ_API_KEY", ""),
+        getattr(settings, "DEEPSEEK_API_KEY", ""),
+        getattr(settings, "SMTP_PASSWORD", ""),
+    ]
+    redacted = text
+    for secret in secrets_to_mask:
+        if secret and len(secret) > 4 and secret in redacted:
+            redacted = redacted.replace(secret, "[REDACTED_SECRET]")
+    return redacted
+
+def build_minimal_sandbox_env() -> Dict[str, str]:
+    """
+    Construct a stripped, minimal execution environment containing ZERO application secrets.
+    Only strictly required system runtime variables are passed to the child process.
+    """
+    clean_env = {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    allowed_os_keys = [
+        "SYSTEMROOT", "WINDIR", "PATHEXT", "COMSPEC",
+        "PATH", "TEMP", "TMP",
+        "LANG", "LC_ALL"
+    ]
+    for k in allowed_os_keys:
+        val = os.environ.get(k)
+        if val is not None:
+            clean_env[k] = val
+    return clean_env
+
+def validate_code_safety(code: str) -> Optional[str]:
+    """
+    Inspect user code for dangerous calls, network operations, process execution, and destructive patterns.
+    Returns error message if blocked, or None if acceptable.
+    """
+    blocked_keywords = [
+        "shutil.rmtree",
+        "os.system",
+        "os.popen",
+        "os.exec",
+        "subprocess",
+        "ctypes",
+        "socket.",
+        "import socket",
+        "from socket",
+        "http.client",
+        "urllib.request",
+        "requests.",
+        "import requests",
+        "httpx.",
+        "import httpx",
+        "format c:",
+        ":(){ :|:& };:"
+    ]
+    code_lower = code.lower()
+    for kw in blocked_keywords:
+        if kw in code_lower:
+            return f"Security Exception: Potentially destructive system call or restricted module '{kw}' blocked by execution sandbox policy."
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return None
+
+    disallowed_modules = {
+        "socket", "subprocess", "ctypes", "pty", "shutil",
+        "http", "urllib", "requests", "httpx", "aiohttp",
+        "multiprocessing", "threading", "signal"
+    }
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root_mod = alias.name.split(".")[0]
+                if root_mod in disallowed_modules:
+                    return f"Security Exception: Import of restricted module '{alias.name}' is prohibited by execution sandbox policy."
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                root_mod = node.module.split(".")[0]
+                if root_mod in disallowed_modules:
+                    return f"Security Exception: Import from restricted module '{node.module}' is prohibited by execution sandbox policy."
+
+    return None
 
 class CodingService:
     """Service providing AI code generation, debugging, refactoring, explanation, optimization, and sandboxed execution."""
@@ -112,121 +210,143 @@ class CodingService:
 
     async def execute_sandboxed_code(self, req: CodeExecutionRequest) -> CodeExecutionResponse:
         """
-        Execute code in a safe, isolated subprocess with strict timeouts and memory boundaries.
-        Never allows arbitrary access or long-running execution on production host.
+        Execute code in a hardened, isolated sandbox with strict timeouts,
+        ephemeral temporary workspace, stripped environment, output caps, and secret redaction.
         """
+        # Feature toggle check
+        if not getattr(settings, "ENABLE_CODE_EXECUTION", True):
+            return CodeExecutionResponse(
+                status="error",
+                output="",
+                error="Secure isolated code execution is currently disabled on this host. Use AI Code Assistant to generate, refactor, and review code.",
+                executionTimeMs=0.0,
+                exitCode=1,
+                success=False,
+                stdout="",
+                stderr="Secure isolated code execution is currently disabled on this host. Use AI Code Assistant to generate, refactor, and review code.",
+                durationMs=0.0
+            )
+
         lang = req.language.lower()
         code = req.code
         stdin_data = req.stdin or ""
-        timeout_seconds = 4.0  # Max 4s execution
+        timeout_seconds = getattr(settings, "CODE_EXECUTION_TIMEOUT_SECONDS", 4.0)
+        max_output_bytes = getattr(settings, "MAX_CODE_OUTPUT_BYTES", 65536)
 
-        # Security check: Block risky dangerous shell commands in execution string
-        dangerous_patterns = [
-            "import shutil; shutil.rmtree",
-            "shutil.rmtree",
-            "os.system('rm",
-            "os.system('del",
-            "subprocess.Popen(['rm",
-            "format c:",
-            ":(){ :|:& };:"
-        ]
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                return CodeExecutionResponse(
-                    status="error",
-                    output="",
-                    error="Security Exception: Potentially destructive system call blocked by execution sandbox policy.",
-                    executionTimeMs=0.0,
-                    exitCode=1,
-                    success=False,
-                    stdout="",
-                    stderr="Security Exception: Potentially destructive system call blocked by execution sandbox policy.",
-                    durationMs=0.0
-                )
+        # 1. Static security validation
+        security_error = validate_code_safety(code)
+        if security_error:
+            return CodeExecutionResponse(
+                status="error",
+                output="",
+                error=security_error,
+                executionTimeMs=0.0,
+                exitCode=1,
+                success=False,
+                stdout="",
+                stderr=security_error,
+                durationMs=0.0
+            )
 
         start_time = time.perf_counter()
 
         if lang == "python":
+            # 2. Ephemeral disposable workspace
             try:
-                # Run Python in isolated process with clean environment and timeout
-                cmd = [sys.executable, "-c", code]
-                
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
+                with tempfile.TemporaryDirectory(prefix="nexora_sandbox_") as tmp_workspace:
+                    script_path = Path(tmp_workspace) / "script.py"
+                    script_path.write_text(code, encoding="utf-8")
 
-                try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                        proc.communicate(input=stdin_data.encode("utf-8")),
-                        timeout=timeout_seconds
+                    # Execute with isolated flags: -I (isolated mode, ignores PYTHONPATH/user site-packages), -B (no .pyc)
+                    cmd = [sys.executable, "-I", "-B", str(script_path)]
+                    clean_env = build_minimal_sandbox_env()
+
+                    proc = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        cwd=tmp_workspace,
+                        env=clean_env,
+                        stdin=asyncio.subprocess.PIPE,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
                     )
-                    elapsed_ms = (time.perf_counter() - start_time) * 1000
 
-                    stdout_str = stdout_bytes.decode("utf-8", errors="replace")
-                    stderr_str = stderr_bytes.decode("utf-8", errors="replace")
-                    exit_code = proc.returncode or 0
-
-                    if exit_code == 0:
-                        return CodeExecutionResponse(
-                            status="success",
-                            output=stdout_str.strip() or "[Program executed successfully with no stdout]",
-                            error=stderr_str.strip() if stderr_str.strip() else None,
-                            executionTimeMs=round(elapsed_ms, 2),
-                            exitCode=exit_code,
-                            success=True,
-                            stdout=stdout_str,
-                            stderr=stderr_str,
-                            durationMs=round(elapsed_ms, 2)
-                        )
-                    else:
-                        return CodeExecutionResponse(
-                            status="error",
-                            output=stdout_str.strip(),
-                            error=stderr_str.strip() or f"Process exited with code {exit_code}",
-                            executionTimeMs=round(elapsed_ms, 2),
-                            exitCode=exit_code,
-                            success=False,
-                            stdout=stdout_str,
-                            stderr=stderr_str,
-                            durationMs=round(elapsed_ms, 2)
-                        )
-
-                except asyncio.TimeoutError:
                     try:
-                        proc.kill()
-                    except Exception:
-                        pass
-                    elapsed_ms = (time.perf_counter() - start_time) * 1000
-                    return CodeExecutionResponse(
-                        status="timeout",
-                        output="",
-                        error=f"Execution Timed Out ({timeout_seconds}s limit exceeded). Infinite loop or long-running task terminated.",
-                        executionTimeMs=round(elapsed_ms, 2),
-                        exitCode=-1,
-                        success=False,
-                        stdout="",
-                        stderr=f"Execution Timed Out ({timeout_seconds}s limit exceeded). Infinite loop or long-running task terminated.",
-                        durationMs=round(elapsed_ms, 2)
-                    )
+                        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                            proc.communicate(input=stdin_data.encode("utf-8")),
+                            timeout=timeout_seconds
+                        )
+                        elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+                        # Truncate output to prevent memory exhaustion / DoS
+                        if len(stdout_bytes) > max_output_bytes:
+                            stdout_bytes = stdout_bytes[:max_output_bytes] + b"\n... [Output truncated after limit exceeded]"
+                        if len(stderr_bytes) > max_output_bytes:
+                            stderr_bytes = stderr_bytes[:max_output_bytes] + b"\n... [Error output truncated after limit exceeded]"
+
+                        stdout_str = redact_sensitive_values(stdout_bytes.decode("utf-8", errors="replace"))
+                        stderr_str = redact_sensitive_values(stderr_bytes.decode("utf-8", errors="replace"))
+                        exit_code = proc.returncode or 0
+
+                        if exit_code == 0:
+                            return CodeExecutionResponse(
+                                status="success",
+                                output=stdout_str.strip() or "[Program executed successfully with no stdout]",
+                                error=stderr_str.strip() if stderr_str.strip() else None,
+                                executionTimeMs=round(elapsed_ms, 2),
+                                exitCode=exit_code,
+                                success=True,
+                                stdout=stdout_str,
+                                stderr=stderr_str,
+                                durationMs=round(elapsed_ms, 2)
+                            )
+                        else:
+                            return CodeExecutionResponse(
+                                status="error",
+                                output=stdout_str.strip(),
+                                error=stderr_str.strip() or f"Process exited with code {exit_code}",
+                                executionTimeMs=round(elapsed_ms, 2),
+                                exitCode=exit_code,
+                                success=False,
+                                stdout=stdout_str,
+                                stderr=stderr_str,
+                                durationMs=round(elapsed_ms, 2)
+                            )
+
+                    except asyncio.TimeoutError:
+                        try:
+                            proc.kill()
+                            await proc.wait()
+                        except Exception:
+                            pass
+                        elapsed_ms = (time.perf_counter() - start_time) * 1000
+                        return CodeExecutionResponse(
+                            status="timeout",
+                            output="",
+                            error=f"Execution Timed Out ({timeout_seconds}s limit exceeded). Infinite loop or long-running task terminated.",
+                            executionTimeMs=round(elapsed_ms, 2),
+                            exitCode=-1,
+                            success=False,
+                            stdout="",
+                            stderr=f"Execution Timed Out ({timeout_seconds}s limit exceeded). Infinite loop or long-running task terminated.",
+                            durationMs=round(elapsed_ms, 2)
+                        )
 
             except Exception as exc:
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
+                logger.error(f"Sandbox runner error: {exc}", exc_info=False)
                 return CodeExecutionResponse(
                     status="error",
                     output="",
-                    error=f"Execution Engine Error: {str(exc)}",
+                    error="Execution Engine Error: Code execution failed within sandbox.",
                     executionTimeMs=round(elapsed_ms, 2),
                     exitCode=1,
                     success=False,
                     stdout="",
-                    stderr=str(exc),
+                    stderr="Execution Engine Error: Code execution failed within sandbox.",
                     durationMs=round(elapsed_ms, 2)
                 )
         else:
-            # JavaScript / Node fallback or simulation
+            # JavaScript / Node simulation
             return CodeExecutionResponse(
                 status="success",
                 output=f"[{lang.upper()} Sandbox Output]\nExecution simulated safely for {lang.upper()}.",
