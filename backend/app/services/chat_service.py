@@ -301,13 +301,22 @@ class ChatService:
                     detail="Message not found or access denied"
                 )
 
-            msg_created_at = msg["createdAt"]
-
-            # 2. Delete all messages created AFTER this message in the conversation
-            await db.execute(
-                "DELETE FROM messages WHERE conversationId = ? AND createdAt > ?",
-                (conversation_id, msg_created_at)
+            # 2. Fetch all messages in the conversation in chronological order
+            cursor_all = await db.execute(
+                "SELECT id FROM messages WHERE conversationId = ? ORDER BY createdAt ASC",
+                (conversation_id,)
             )
+            all_msgs = await cursor_all.fetchall()
+            target_idx = None
+            for idx, m in enumerate(all_msgs):
+                if m["id"] == message_id:
+                    target_idx = idx
+                    break
+
+            if target_idx is not None and target_idx < len(all_msgs) - 1:
+                subsequent_ids = [m["id"] for m in all_msgs[target_idx + 1:]]
+                for del_id in subsequent_ids:
+                    await db.execute("DELETE FROM messages WHERE id = ?", (del_id,))
 
             # 3. Update the target message content
             await db.execute(

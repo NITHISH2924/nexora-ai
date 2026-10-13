@@ -75,12 +75,39 @@ class UserResponse(BaseModel):
     loginCount: int
     accountStatus: str # 'ACTIVE', 'PENDING_VERIFICATION', 'SUSPENDED'
     emailVerified: bool
+    mfaEnabled: bool = False
 
 class AuthResponse(BaseModel):
     user: UserResponse
     token: str
     tokenType: str = "Bearer"
     message: str
+
+class LoginResponse(BaseModel):
+    user: Optional[UserResponse] = None
+    token: Optional[str] = None
+    tokenType: Optional[str] = "Bearer"
+    message: str
+    mfaRequired: bool = False
+    mfaSessionToken: Optional[str] = None
+
+class MFAVerifyRequest(BaseModel):
+    mfaSessionToken: str = Field(..., min_length=10)
+    code: str = Field(..., min_length=6, max_length=16)
+
+class MFAEnableRequest(BaseModel):
+    secret: str = Field(..., min_length=16)
+    code: str = Field(..., min_length=6, max_length=16)
+    recoveryCodes: List[str] = Field(..., min_length=1)
+
+class MFADisableRequest(BaseModel):
+    currentPassword: str = Field(..., min_length=1)
+    code: str = Field(..., min_length=6, max_length=16)
+
+class MFASetupResponse(BaseModel):
+    secret: str
+    otpauthUri: str
+    recoveryCodes: List[str]
 
 class MessageResponse(BaseModel):
     success: bool = True

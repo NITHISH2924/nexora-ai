@@ -65,6 +65,17 @@ CAMEL_KEY_MAP = {
     "lastmessage": "lastMessage",
     "fileids": "fileIds",
     "model": "model",
+    "mfaenabled": "mfaEnabled",
+    "mfasecret": "mfaSecret",
+    "mfarecoverycodes": "mfaRecoveryCodes",
+    "tokenrevocationtimestamp": "tokenRevocationTimestamp",
+    "sessionid": "sessionId",
+    "tokenhash": "tokenHash",
+    "lastseenat": "lastSeenAt",
+    "expiresat": "expiresAt",
+    "isrevoked": "isRevoked",
+    "revokedat": "revokedAt",
+    "revocationreason": "revocationReason",
 }
 
 class CaseInsensitiveRow(dict):
@@ -324,6 +335,38 @@ async def create_tables():
             await db.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);")
 
+            # Column migrations for Stage 3 MFA & Session revocation
+            for col_name, col_sql in [
+                ("mfaEnabled", "INTEGER NOT NULL DEFAULT 0"),
+                ("mfaSecret", "TEXT"),
+                ("mfaRecoveryCodes", "TEXT"),
+                ("tokenRevocationTimestamp", "TEXT"),
+            ]:
+                try:
+                    await db.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_sql};")
+                except Exception:
+                    pass
+
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                sessionId TEXT PRIMARY KEY,
+                userId TEXT NOT NULL,
+                tokenHash TEXT UNIQUE NOT NULL,
+                ipAddress TEXT,
+                userAgent TEXT,
+                createdAt TEXT NOT NULL,
+                lastSeenAt TEXT NOT NULL,
+                expiresAt TEXT NOT NULL,
+                isRevoked INTEGER NOT NULL DEFAULT 0,
+                revokedAt TEXT,
+                revocationReason TEXT,
+                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+            );
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_tokenHash ON active_sessions(tokenHash);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_userId ON active_sessions(userId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt ON active_sessions(expiresAt);")
+
             await db.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id SERIAL PRIMARY KEY,
@@ -507,7 +550,38 @@ async def create_tables():
                 FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
             );
             """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_memories_userId ON user_memories(userId);")
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                id SERIAL PRIMARY KEY,
+                sessionId VARCHAR(128) NOT NULL UNIQUE,
+                userId VARCHAR(128) NOT NULL,
+                tokenHash VARCHAR(128) NOT NULL UNIQUE,
+                ipAddress VARCHAR(64),
+                userAgent TEXT,
+                createdAt VARCHAR(64) NOT NULL,
+                lastSeenAt VARCHAR(64) NOT NULL,
+                expiresAt VARCHAR(64),
+                isRevoked INTEGER NOT NULL DEFAULT 0,
+                revokedAt VARCHAR(64),
+                revocationReason VARCHAR(128),
+                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+            );
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_userId ON active_sessions(userId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_tokenHash ON active_sessions(tokenHash);")
+
+            # Column migrations for users table (MFA & session revocation)
+            for col_name, col_type in [
+                ("mfaEnabled", "INTEGER NOT NULL DEFAULT 0"),
+                ("mfaSecret", "TEXT"),
+                ("mfaRecoveryCodes", "TEXT"),
+                ("tokenRevocationTimestamp", "VARCHAR(64)")
+            ]:
+                try:
+                    await db.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+                except Exception:
+                    pass
+
             await db.commit()
 
         else:
@@ -562,6 +636,38 @@ async def create_tables():
             await db.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_users_verify_token ON users(emailVerificationToken);")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(passwordResetToken);")
+
+            # Column migrations for Stage 3 MFA & Session revocation
+            for col_name, col_sql in [
+                ("mfaEnabled", "INTEGER NOT NULL DEFAULT 0"),
+                ("mfaSecret", "TEXT"),
+                ("mfaRecoveryCodes", "TEXT"),
+                ("tokenRevocationTimestamp", "TEXT"),
+            ]:
+                try:
+                    await db.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_sql};")
+                except Exception:
+                    pass
+
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                sessionId TEXT PRIMARY KEY,
+                userId TEXT NOT NULL,
+                tokenHash TEXT UNIQUE NOT NULL,
+                ipAddress TEXT,
+                userAgent TEXT,
+                createdAt TEXT NOT NULL,
+                lastSeenAt TEXT NOT NULL,
+                expiresAt TEXT NOT NULL,
+                isRevoked INTEGER NOT NULL DEFAULT 0,
+                revokedAt TEXT,
+                revocationReason TEXT,
+                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+            );
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_tokenHash ON active_sessions(tokenHash);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_userId ON active_sessions(userId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt ON active_sessions(expiresAt);")
 
             await db.execute("""
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -750,5 +856,36 @@ async def create_tables():
             );
             """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_memories_userId ON user_memories(userId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_memories_active ON user_memories(userId, isActive);")
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sessionId TEXT NOT NULL UNIQUE,
+                userId TEXT NOT NULL,
+                tokenHash TEXT NOT NULL UNIQUE,
+                ipAddress TEXT,
+                userAgent TEXT,
+                createdAt TEXT NOT NULL,
+                lastSeenAt TEXT NOT NULL,
+                expiresAt TEXT,
+                isRevoked INTEGER NOT NULL DEFAULT 0,
+                revokedAt TEXT,
+                revocationReason TEXT,
+                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+            );
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_userId ON active_sessions(userId);")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_tokenHash ON active_sessions(tokenHash);")
+
+            # Ensure users table has MFA & session revocation columns
+            cur = await db.execute("PRAGMA table_info(users)")
+            existing_cols = [c["name"].lower() for c in await cur.fetchall()]
+            if "mfaenabled" not in existing_cols:
+                await db.execute("ALTER TABLE users ADD COLUMN mfaEnabled INTEGER NOT NULL DEFAULT 0")
+            if "mfasecret" not in existing_cols:
+                await db.execute("ALTER TABLE users ADD COLUMN mfaSecret TEXT")
+            if "mfarecoverycodes" not in existing_cols:
+                await db.execute("ALTER TABLE users ADD COLUMN mfaRecoveryCodes TEXT")
+            if "tokenrevocationtimestamp" not in existing_cols:
+                await db.execute("ALTER TABLE users ADD COLUMN tokenRevocationTimestamp TEXT")
+
             await db.commit()

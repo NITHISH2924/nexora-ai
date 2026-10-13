@@ -84,6 +84,13 @@ class Settings:
     RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "30"))
 
+    # Stage 3: Authentication, Session & Brute Force Defense
+    AUTH_MAX_FAILED_ATTEMPTS: int = int(os.getenv("AUTH_MAX_FAILED_ATTEMPTS", "5"))
+    AUTH_LOCKOUT_DURATION_SECONDS: int = int(os.getenv("AUTH_LOCKOUT_DURATION_SECONDS", "300")) # 5 min lockout
+    AUTH_IP_MAX_LOGIN_ATTEMPTS: int = int(os.getenv("AUTH_IP_MAX_LOGIN_ATTEMPTS", "10"))
+    REQUIRE_OWNER_MFA: bool = os.getenv("REQUIRE_OWNER_MFA", "true").lower() in ("true", "1", "yes")
+    MFA_TEMP_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("MFA_TEMP_TOKEN_EXPIRE_MINUTES", "5"))
+
     # Code Execution Sandbox Hardening
     ENABLE_CODE_EXECUTION: bool = os.getenv("ENABLE_CODE_EXECUTION", "true").lower() in ("true", "1", "yes")
     CODE_EXECUTION_TIMEOUT_SECONDS: float = float(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "4.0"))

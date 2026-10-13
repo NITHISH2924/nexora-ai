@@ -1,6 +1,7 @@
+import json
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import aiosqlite
 from fastapi import HTTPException, status
 from backend.app.config import settings
@@ -9,7 +10,12 @@ from backend.app.security import (
     hash_password,
     verify_password,
     generate_secure_token,
-    create_access_token
+    create_access_token,
+    decode_access_token,
+    hash_token,
+    revoke_token_hash,
+    is_token_hash_revoked,
+    auth_rate_limiter
 )
 from backend.app.models import (
     UserRegisterRequest,
@@ -19,6 +25,7 @@ from backend.app.models import (
     ChangePasswordRequest
 )
 from backend.app.services.email_service import email_service
+from backend.app.services.mfa_service import mfa_service
 
 def row_to_user_dict(row: Any) -> dict:
     """Convert db row or dict to safe user dict for UserResponse."""
@@ -33,18 +40,259 @@ def row_to_user_dict(row: Any) -> dict:
         "lastLoginAt": row["lastLoginAt"],
         "loginCount": row["loginCount"],
         "accountStatus": row["accountStatus"],
-        "emailVerified": bool(row["emailVerified"])
+        "emailVerified": bool(row["emailVerified"]),
+        "mfaEnabled": bool(row["mfaEnabled"]) if "mfaEnabled" in keys else False
     }
 
 class UserService:
     @staticmethod
-    async def log_activity(db: aiosqlite.Connection, user_id: str, action: str, details: Optional[str] = None, ip_address: Optional[str] = None, user_agent: Optional[str] = None):
+    async def log_activity(db: Any, user_id: str, action: str, details: Optional[str] = None, ip_address: Optional[str] = None, user_agent: Optional[str] = None):
+        if not user_id or user_id in ("anonymous", "system"):
+            return
         now = datetime.now(timezone.utc).isoformat()
-        await db.execute(
-            "INSERT INTO audit_logs (userId, action, details, ipAddress, userAgent, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, action, details, ip_address, user_agent, now)
-        )
+        try:
+            await db.execute(
+                "INSERT INTO audit_logs (userId, action, details, ipAddress, userAgent, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, action, details, ip_address, user_agent, now)
+            )
+            await db.commit()
+        except Exception:
+            pass
+
+    @classmethod
+    async def create_session(cls, db: Any, user_id: str, token: str, ip_address: Optional[str] = None, user_agent: Optional[str] = None, expires_delta: Optional[timedelta] = None):
+        """Register active session in database."""
+        session_id = str(uuid.uuid4())
+        token_hash = hash_token(token)
+        now_dt = datetime.now(timezone.utc)
+        now_str = now_dt.isoformat()
+        if expires_delta:
+            exp_str = (now_dt + expires_delta).isoformat()
+        else:
+            exp_str = (now_dt + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)).isoformat()
+        
+        await db.execute("""
+        INSERT INTO active_sessions (
+            sessionId, userId, tokenHash, ipAddress, userAgent,
+            createdAt, lastSeenAt, expiresAt, isRevoked
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (session_id, user_id, token_hash, ip_address, user_agent, now_str, now_str, exp_str))
         await db.commit()
+
+    @classmethod
+    async def revoke_session(cls, token: str, user_id: str, reason: str = "USER_LOGOUT", ip_address: Optional[str] = None, user_agent: Optional[str] = None):
+        """Immediately invalidate a specific session token."""
+        token_hash = hash_token(token)
+        revoke_token_hash(token_hash)
+        now = datetime.now(timezone.utc).isoformat()
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE active_sessions SET isRevoked = 1, revokedAt = ?, revocationReason = ? WHERE tokenHash = ?",
+                (now, reason, token_hash)
+            )
+            await db.commit()
+            await cls.log_activity(db, user_id, "LOGOUT", f"Session revoked: {reason}", ip_address, user_agent)
+
+    @classmethod
+    async def revoke_all_user_sessions(cls, user_id: str, reason: str = "SECURITY_RESET", ip_address: Optional[str] = None, user_agent: Optional[str] = None):
+        """Invalidate all active sessions for a user (password change, suspension, admin reset)."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE users SET tokenRevocationTimestamp = ? WHERE userId = ?",
+                (now, user_id)
+            )
+            await db.execute(
+                "UPDATE active_sessions SET isRevoked = 1, revokedAt = ?, revocationReason = ? WHERE userId = ?",
+                (now, reason, user_id)
+            )
+            await db.commit()
+            await cls.log_activity(db, user_id, "SESSIONS_REVOKED", f"All active sessions invalidated: {reason}", ip_address, user_agent)
+
+    @classmethod
+    async def validate_session(cls, user_id: str, token_hash: str, token_iat_timestamp: Optional[Any] = None) -> bool:
+        """Validate whether token is active, unexpired, and unrevoked."""
+        if is_token_hash_revoked(token_hash):
+            return False
+
+        async with get_db() as db:
+            async with db.execute("SELECT accountStatus, tokenRevocationTimestamp FROM users WHERE userId = ?", (user_id,)) as cursor:
+                raw_user = await cursor.fetchone()
+                if not raw_user:
+                    return False
+                user_row = dict(raw_user)
+                if user_row.get("accountStatus") == "SUSPENDED":
+                    return False
+                rev_ts = user_row.get("tokenRevocationTimestamp")
+                if rev_ts and token_iat_timestamp:
+                    try:
+                        if isinstance(token_iat_timestamp, (int, float)):
+                            token_sec = int(token_iat_timestamp)
+                        elif isinstance(token_iat_timestamp, datetime):
+                            token_sec = int(token_iat_timestamp.timestamp())
+                        else:
+                            token_sec = int(datetime.fromisoformat(str(token_iat_timestamp)).timestamp())
+                        
+                        rev_sec = int(datetime.fromisoformat(rev_ts).timestamp())
+                        if token_sec < rev_sec:
+                            return False
+                    except Exception:
+                        pass
+
+            try:
+                async with db.execute("SELECT isRevoked, expiresAt FROM active_sessions WHERE tokenHash = ?", (token_hash,)) as cursor:
+                    raw_sess = await cursor.fetchone()
+                    if raw_sess:
+                        sess = dict(raw_sess)
+                        if sess.get("isRevoked") == 1:
+                            return False
+                        if sess.get("expiresAt"):
+                            try:
+                                if datetime.fromisoformat(sess["expiresAt"]) < datetime.now(timezone.utc):
+                                    return False
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+        return True
+
+    @classmethod
+    async def setup_mfa(cls, user_id: str) -> dict:
+        """Generate new provisional TOTP secret and recovery codes for enrollment."""
+        user = await cls.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+        secret = mfa_service.generate_mfa_secret()
+        uri = mfa_service.get_totp_uri(secret, user["email"])
+        plain_codes, _ = mfa_service.generate_recovery_codes(count=8)
+        return {
+            "secret": secret,
+            "otpauthUri": uri,
+            "recoveryCodes": plain_codes
+        }
+
+    @classmethod
+    async def enable_mfa(cls, user_id: str, secret: str, code: str, recovery_codes: List[str], ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> bool:
+        """Verify code against provisional secret and activate MFA on user account."""
+        if not mfa_service.verify_totp_code(secret, code):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code. Please check your authenticator app.")
+        
+        hashed_codes = [mfa_service._hash_code(c) for c in recovery_codes]
+        codes_json = json.dumps(hashed_codes)
+
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE users SET mfaEnabled = 1, mfaSecret = ?, mfaRecoveryCodes = ? WHERE userId = ?",
+                (secret, codes_json, user_id)
+            )
+            await db.commit()
+            await cls.log_activity(db, user_id, "MFA_ENABLED", "Two-factor authentication enrolled and enabled", ip_address, user_agent)
+        return True
+
+    @classmethod
+    async def disable_mfa(cls, user_id: str, current_password: str, code: str, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> bool:
+        """Disable MFA after verifying current password and valid TOTP code."""
+        user = await cls.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+        if not verify_password(current_password, user["passwordHash"]):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+        
+        secret = user.get("mfaSecret", "")
+        if not mfa_service.verify_totp_code(secret, code):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid two-factor authentication code")
+
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE users SET mfaEnabled = 0, mfaSecret = NULL, mfaRecoveryCodes = NULL WHERE userId = ?",
+                (user_id,)
+            )
+            await db.commit()
+            await cls.log_activity(db, user_id, "MFA_DISABLED", "Two-factor authentication disabled", ip_address, user_agent)
+        return True
+
+    @classmethod
+    async def verify_mfa_login(cls, mfa_session_token: str, code: str, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> tuple[dict, str]:
+        """Verify TOTP code or backup recovery code during MFA login."""
+        payload = decode_access_token(mfa_session_token)
+        if not payload or payload.get("type") != "mfa_temp" or "sub" not in payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired two-factor authentication session"
+            )
+        
+        user_id = payload["sub"]
+        user = await cls.get_user_by_id(user_id)
+        if not user or user["accountStatus"] == "SUSPENDED":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account not found or suspended"
+            )
+
+        secret = user.get("mfaSecret", "")
+        totp_valid = mfa_service.verify_totp_code(secret, code)
+        recovery_valid = False
+        remaining_recovery_json = None
+
+        if not totp_valid and user.get("mfaRecoveryCodes"):
+            try:
+                stored_hashes = json.loads(user["mfaRecoveryCodes"])
+                recovery_valid, rem_hashes = mfa_service.verify_and_consume_recovery_code(stored_hashes, code)
+                if recovery_valid:
+                    remaining_recovery_json = json.dumps(rem_hashes)
+            except Exception:
+                pass
+
+        if not totp_valid and not recovery_valid:
+            async with get_db() as db:
+                await cls.log_activity(db, user_id, "MFA_FAILED", "Invalid TOTP code or recovery code submitted", ip_address, user_agent)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid two-factor authentication code or recovery code"
+            )
+
+        now = datetime.now(timezone.utc).isoformat()
+        new_count = user["loginCount"] + 1
+        expire_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        token_payload = {
+            "sub": user["userId"],
+            "email": user["email"],
+            "role": user["role"]
+        }
+        token = create_access_token(token_payload, expires_delta=expire_delta)
+
+        async with get_db() as db:
+            if remaining_recovery_json is not None:
+                await db.execute(
+                    "UPDATE users SET lastLoginAt = ?, loginCount = ?, mfaRecoveryCodes = ? WHERE userId = ?",
+                    (now, new_count, remaining_recovery_json, user["userId"])
+                )
+            else:
+                await db.execute(
+                    "UPDATE users SET lastLoginAt = ?, loginCount = ? WHERE userId = ?",
+                    (now, new_count, user["userId"])
+                )
+            await cls.create_session(db, user["userId"], token, ip_address, user_agent, expires_delta=expire_delta)
+            await db.commit()
+            action_desc = "Successful login via backup recovery code" if recovery_valid else "Successful login via TOTP MFA"
+            await cls.log_activity(db, user["userId"], "LOGIN_MFA_SUCCESS", action_desc, ip_address, user_agent)
+
+        user_profile = {
+            "userId": user["userId"],
+            "email": user["email"],
+            "role": user["role"],
+            "accountCreatedAt": user["accountCreatedAt"],
+            "lastLoginAt": now,
+            "loginCount": new_count,
+            "accountStatus": user["accountStatus"],
+            "emailVerified": bool(user["emailVerified"]),
+            "mfaEnabled": True,
+            "mfaRequired": False
+        }
+        return user_profile, token
 
     @classmethod
     async def get_user_by_email(cls, email: str) -> Optional[dict]:
@@ -104,6 +352,14 @@ class UserService:
         account_status = "ACTIVE"
         email_verified = 1 if role in ("OWNER", "CEO") else 0
 
+        # Generate JWT session token
+        token_payload = {
+            "sub": user_id,
+            "email": clean_email,
+            "role": role
+        }
+        token = create_access_token(token_payload)
+
         async with get_db() as db:
             await db.execute("""
             INSERT INTO users (
@@ -122,20 +378,13 @@ class UserService:
                 INSERT INTO user_preferences (userId, displayName, updatedAt)
                 VALUES (?, ?, ?)
                 """, (user_id, full_name, created_at))
+            await cls.create_session(db, user_id, token, ip_address, user_agent)
             await db.commit()
             await cls.log_activity(db, user_id, "REGISTER", f"Account created with role {role}", ip_address, user_agent)
 
         # Dispatch verification email
         if not email_verified:
             email_service.send_verification_email(clean_email, verify_token)
-
-        # Generate JWT session token
-        token_payload = {
-            "sub": user_id,
-            "email": clean_email,
-            "role": role
-        }
-        token = create_access_token(token_payload)
         
         user_profile = {
             "userId": user_id,
@@ -146,37 +395,92 @@ class UserService:
             "lastLoginAt": created_at,
             "loginCount": 1,
             "accountStatus": account_status,
-            "emailVerified": bool(email_verified)
+            "emailVerified": bool(email_verified),
+            "mfaEnabled": False
         }
         return user_profile, token
 
     @classmethod
     async def login_user(cls, data: UserLoginRequest, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> tuple[dict, str]:
         clean_email = data.email.strip().lower()
+
+        # 1. Check account-level lockout
+        locked, retry_after = auth_rate_limiter.is_account_locked(clean_email)
+        if locked:
+            async with get_db() as db:
+                await cls.log_activity(
+                    db,
+                    "system",
+                    "LOGIN_LOCKED",
+                    f"Blocked login attempt on locked account ({clean_email[:2]}***)",
+                    ip_address,
+                    user_agent
+                )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many failed login attempts. Account temporarily locked for {retry_after} seconds.",
+                headers={"Retry-After": str(retry_after)}
+            )
+
         user = await cls.get_user_by_email(clean_email)
         
+        # 2. Verify credentials
         if not user or not verify_password(data.password, user["passwordHash"]):
+            failure_count = auth_rate_limiter.record_failure(clean_email)
+            async with get_db() as db:
+                uid = user["userId"] if user else "anonymous"
+                await cls.log_activity(
+                    db,
+                    uid,
+                    "LOGIN_FAILED",
+                    f"Failed login attempt for {clean_email[:2]}*** (consecutive failure {failure_count})",
+                    ip_address,
+                    user_agent
+                )
+            now_locked, lock_seconds = auth_rate_limiter.is_account_locked(clean_email)
+            if now_locked:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many failed login attempts. Account temporarily locked for {lock_seconds} seconds.",
+                    headers={"Retry-After": str(lock_seconds)}
+                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
 
+        # 3. Successful password verification
+        auth_rate_limiter.record_success(clean_email)
+
+        # 4. Check account suspension
         if user["accountStatus"] == "SUSPENDED":
+            async with get_db() as db:
+                await cls.log_activity(db, user["userId"], "LOGIN_REJECTED", "Login attempted on suspended account", ip_address, user_agent)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your account has been suspended. Please contact support."
             )
 
+        # 5. Check if MFA challenge is required
+        if user.get("mfaEnabled"):
+            mfa_payload = {
+                "sub": user["userId"],
+                "email": user["email"],
+                "role": user["role"],
+                "type": "mfa_temp"
+            }
+            mfa_temp_token = create_access_token(
+                mfa_payload,
+                expires_delta=timedelta(minutes=getattr(settings, "MFA_TEMP_TOKEN_EXPIRE_MINUTES", 5)),
+                token_type="mfa_temp"
+            )
+            async with get_db() as db:
+                await cls.log_activity(db, user["userId"], "LOGIN_MFA_CHALLENGE", "MFA verification challenge presented", ip_address, user_agent)
+            return {"mfaRequired": True, "userId": user["userId"]}, mfa_temp_token
+
+        # 6. Standard login without MFA
         now = datetime.now(timezone.utc).isoformat()
         new_count = user["loginCount"] + 1
-
-        async with get_db() as db:
-            await db.execute(
-                "UPDATE users SET lastLoginAt = ?, loginCount = ? WHERE userId = ?",
-                (now, new_count, user["userId"])
-            )
-            await db.commit()
-            await cls.log_activity(db, user["userId"], "LOGIN", "Successful login", ip_address, user_agent)
 
         # Calculate expiration
         expire_delta = timedelta(days=30) if data.rememberMe else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -188,6 +492,15 @@ class UserService:
         }
         token = create_access_token(token_payload, expires_delta=expire_delta)
 
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE users SET lastLoginAt = ?, loginCount = ? WHERE userId = ?",
+                (now, new_count, user["userId"])
+            )
+            await cls.create_session(db, user["userId"], token, ip_address, user_agent, expires_delta=expire_delta)
+            await db.commit()
+            await cls.log_activity(db, user["userId"], "LOGIN", "Successful login", ip_address, user_agent)
+
         user_profile = {
             "userId": user["userId"],
             "email": user["email"],
@@ -196,7 +509,9 @@ class UserService:
             "lastLoginAt": now,
             "loginCount": new_count,
             "accountStatus": user["accountStatus"],
-            "emailVerified": bool(user["emailVerified"])
+            "emailVerified": bool(user["emailVerified"]),
+            "mfaEnabled": False,
+            "mfaRequired": False
         }
         return user_profile, token
 
@@ -248,6 +563,7 @@ class UserService:
                     (new_hash, user["userId"])
                 )
                 await db.commit()
+                await cls.revoke_all_user_sessions(user["userId"], reason="PASSWORD_RESET", ip_address=ip_address, user_agent=user_agent)
                 await cls.log_activity(db, user["userId"], "PASSWORD_RESET_SUCCESS", "Password updated successfully", ip_address, user_agent)
                 return True
 
@@ -311,6 +627,7 @@ class UserService:
         async with get_db() as db:
             await db.execute("UPDATE users SET passwordHash = ? WHERE userId = ?", (new_hash, user_id))
             await db.commit()
+            await cls.revoke_all_user_sessions(user_id, reason="PASSWORD_CHANGED", ip_address=ip_address, user_agent=user_agent)
             await cls.log_activity(db, user_id, "PASSWORD_CHANGED", "Password changed from user settings", ip_address, user_agent)
             return True
 
@@ -361,6 +678,8 @@ class UserService:
         async with get_db() as db:
             await db.execute("UPDATE users SET accountStatus = ? WHERE userId = ?", (new_status, target_user_id))
             await db.commit()
+            if new_status == "SUSPENDED":
+                await cls.revoke_all_user_sessions(target_user_id, reason="ACCOUNT_SUSPENDED")
             await cls.log_activity(db, admin_user_id, "ADMIN_STATUS_UPDATE", f"Changed status of {user['email']} to {new_status}")
             
         updated = await cls.get_user_by_id(target_user_id)
@@ -394,7 +713,7 @@ class UserService:
             SELECT a.id, a.userId, u.email, a.action, a.details, a.ipAddress, a.userAgent, a.createdAt
             FROM audit_logs a
             LEFT JOIN users u ON a.userId = u.userId
-            WHERE a.action IN ('LOGIN', 'REGISTER')
+            WHERE a.action IN ('LOGIN', 'REGISTER', 'LOGIN_FAILED', 'LOGIN_LOCKED', 'LOGIN_MFA_SUCCESS', 'MFA_FAILED', 'LOGOUT', 'SESSIONS_REVOKED')
             ORDER BY a.id DESC
             LIMIT ?
             """, (limit,)) as cursor:
@@ -419,6 +738,8 @@ class UserService:
                     elif "Edge" in ua:
                         device = "Edge Browser"
 
+                    status_val = "FAILED" if ("FAILED" in r["action"] or "LOCKED" in r["action"]) else "SUCCESS"
+
                     results.append({
                         "id": r["id"],
                         "userId": r["userId"],
@@ -431,7 +752,7 @@ class UserService:
                         "date": date_part,
                         "time": time_part,
                         "createdAt": created,
-                        "status": "SUCCESS"
+                        "status": status_val
                     })
                 return results
 
@@ -455,8 +776,12 @@ class UserService:
             except Exception:
                 pass
 
-        # 2. Delete user record (Foreign keys ON CASCADE will automatically purge conversations, messages, files, images, voice, projects, preferences, memories, audit logs)
+        # 2. Delete active sessions and user record (Foreign keys ON CASCADE will automatically purge conversations, messages, files, images, voice, projects, preferences, memories, audit logs)
         async with get_db() as db:
+            try:
+                await db.execute("DELETE FROM active_sessions WHERE userId = ?", (user_id,))
+            except Exception:
+                pass
             await db.execute("DELETE FROM users WHERE userId = ?", (user_id,))
             await db.commit()
 

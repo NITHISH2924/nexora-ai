@@ -28,18 +28,49 @@ def generate_secure_token() -> str:
     """Generate high-entropy url-safe token for email verification and password reset."""
     return secrets.token_urlsafe(48)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create signed JWT access token."""
+import hashlib
+from typing import Optional, Dict, List, Tuple, Set
+
+# In-memory revocation cache for instant O(1) token invalidation
+_revoked_token_hashes: Set[str] = set()
+
+def hash_token(token: str) -> str:
+    """Compute deterministic SHA-256 hash of a JWT access token for safe storage and lookup."""
+    if not token:
+        return ""
+    return hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
+
+def revoke_token_hash(token_hash: str):
+    """Add token hash to in-memory revocation cache."""
+    if token_hash:
+        _revoked_token_hashes.add(token_hash)
+
+def is_token_hash_revoked(token_hash: str) -> bool:
+    """Check if token hash exists in revocation cache."""
+    if not token_hash:
+        return False
+    return token_hash in _revoked_token_hashes
+
+def create_access_token(
+    data: dict,
+    expires_delta: Optional[timedelta] = None,
+    token_type: str = "access",
+    jti: Optional[str] = None
+) -> str:
+    """Create signed JWT access or temporary MFA token with unique jti and type."""
     to_encode = data.copy()
+    now_utc = datetime.now(timezone.utc)
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = now_utc + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now_utc + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "iss": settings.APP_NAME
+        "iat": now_utc,
+        "iss": settings.APP_NAME,
+        "type": token_type,
+        "jti": jti or secrets.token_hex(16)
     })
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
@@ -91,6 +122,75 @@ rate_limiter = RateLimiter(
     window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
     max_requests=settings.RATE_LIMIT_MAX_REQUESTS
 )
+
+class AuthRateLimiter:
+    """
+    Two-tier brute-force defense limiter:
+    - Account-level consecutive failure lockout
+    - IP-level rate limiting
+    """
+    def __init__(self):
+        self._failed_attempts: Dict[str, List[float]] = {}
+        self._lockouts: Dict[str, float] = {}
+
+    def is_account_locked(self, email: str) -> Tuple[bool, int]:
+        clean_email = email.strip().lower()
+        now = time.time()
+        
+        # Check active lockout
+        lockout_expiry = self._lockouts.get(clean_email, 0)
+        if lockout_expiry > now:
+            return True, int(lockout_expiry - now) + 1
+        elif clean_email in self._lockouts:
+            self._lockouts.pop(clean_email, None)
+            self._failed_attempts.pop(clean_email, None)
+
+        # Check consecutive failures within window
+        window = getattr(settings, "AUTH_LOCKOUT_DURATION_SECONDS", 300)
+        max_failures = getattr(settings, "AUTH_MAX_FAILED_ATTEMPTS", 5)
+        failures = self._failed_attempts.get(clean_email, [])
+        valid_failures = [t for t in failures if now - t < window]
+        self._failed_attempts[clean_email] = valid_failures
+
+        if len(valid_failures) >= max_failures:
+            # Lock out account
+            self._lockouts[clean_email] = now + window
+            return True, window
+
+        return False, 0
+
+    def record_failure(self, email: str) -> int:
+        clean_email = email.strip().lower()
+        now = time.time()
+        window = getattr(settings, "AUTH_LOCKOUT_DURATION_SECONDS", 300)
+        max_failures = getattr(settings, "AUTH_MAX_FAILED_ATTEMPTS", 5)
+
+        failures = self._failed_attempts.get(clean_email, [])
+        valid_failures = [t for t in failures if now - t < window]
+        valid_failures.append(now)
+        self._failed_attempts[clean_email] = valid_failures
+
+        if len(valid_failures) >= max_failures:
+            self._lockouts[clean_email] = now + window
+
+        return len(valid_failures)
+
+    def record_success(self, email: str):
+        clean_email = email.strip().lower()
+        self._failed_attempts.pop(clean_email, None)
+        self._lockouts.pop(clean_email, None)
+
+    def cleanup(self):
+        now = time.time()
+        expired_locks = [k for k, v in self._lockouts.items() if v <= now]
+        for k in expired_locks:
+            self._lockouts.pop(k, None)
+        window = getattr(settings, "AUTH_LOCKOUT_DURATION_SECONDS", 300)
+        stale_accts = [k for k, v in self._failed_attempts.items() if not v or (now - v[-1] > window * 2)]
+        for k in stale_accts:
+            self._failed_attempts.pop(k, None)
+
+auth_rate_limiter = AuthRateLimiter()
 
 # ------------------------------------------------------------------------------
 # Secure Client IP Resolution & Trusted Proxy Validation
