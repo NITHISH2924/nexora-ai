@@ -17,7 +17,7 @@ from backend.app.security import (
     rate_limiter,
     _revoked_token_hashes
 )
-from backend.app.database import get_db
+from backend.app.database import get_db, create_tables
 
 BASE_URL = "http://127.0.0.1:8000"
 
@@ -25,12 +25,28 @@ BASE_URL = "http://127.0.0.1:8000"
 def reset_limiters():
     """Reset rate limiter state and owner MFA state before and after each test."""
     import asyncio
-    async def clear_mfa():
+    async def cleanup_all():
+        await create_tables()
+        await auth_rate_limiter.clear_all()
+        from backend.app.security import hash_password
+        owner_pass = "OwnerSuperPass123"
+        hashed = hash_password(owner_pass)
         async with get_db() as db:
-            await db.execute(
-                "UPDATE users SET mfaEnabled = 0, mfaSecret = NULL, mfaRecoveryCodes = NULL WHERE email = ? COLLATE NOCASE",
-                (settings.OWNER_EMAIL,)
-            )
+            cur = await db.execute("SELECT userId FROM users WHERE email = ? COLLATE NOCASE", (settings.OWNER_EMAIL,))
+            row = await cur.fetchone()
+            if row:
+                await db.execute(
+                    "UPDATE users SET passwordHash = ?, mfaEnabled = 0, mfaSecret = NULL, mfaRecoveryCodes = NULL WHERE email = ? COLLATE NOCASE",
+                    (hashed, settings.OWNER_EMAIL)
+                )
+            else:
+                import uuid
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc).isoformat()
+                await db.execute(
+                    "INSERT INTO users (userId, email, passwordHash, role, accountCreatedAt, lastLoginAt, loginCount, accountStatus, emailVerified, mfaEnabled) VALUES (?, ?, ?, 'OWNER', ?, ?, 0, 'ACTIVE', 1, 0)",
+                    (str(uuid.uuid4()), settings.OWNER_EMAIL, hashed, now, now)
+                )
             await db.commit()
 
     auth_rate_limiter._lockouts.clear()
@@ -38,12 +54,12 @@ def reset_limiters():
     rate_limiter.requests.clear()
     _revoked_token_hashes.clear()
     try:
-        asyncio.run(clear_mfa())
+        asyncio.run(cleanup_all())
     except Exception:
         pass
     yield
     try:
-        asyncio.run(clear_mfa())
+        asyncio.run(cleanup_all())
     except Exception:
         pass
 
@@ -455,3 +471,213 @@ def test_zero_secrets_leakage_in_error_responses():
     assert "SecretPasswordInPayload" not in res.text
     assert settings.JWT_SECRET not in res.text
     print("\n[PASS] Test 11: Zero secret leakage in responses verified.")
+
+def test_persistent_rate_limiter_restart_persistence():
+    """
+    Test 12: Rate limit and lockout state persistence across application/worker restarts.
+    Simulates a worker process restarting by creating a completely fresh limiter instance
+    with empty memory and verifying the database state continues to enforce lockout.
+    """
+    from backend.app.security import PersistentAuthRateLimiter
+    client = TestClient(app, base_url=BASE_URL)
+    rand_id = uuid.uuid4().hex[:6]
+    email = f"restart_target_{rand_id}@example.com"
+    correct_password = "CorrectPassword123"
+
+    reg_res = client.post("/api/auth/signup", json={"email": email, "password": correct_password})
+    assert reg_res.status_code == 200
+
+    # Trigger account lockout (5 failed attempts)
+    for _ in range(5):
+        client.post("/api/auth/login", json={"email": email, "password": "WrongPassword"})
+
+    # Check that account is locked
+    res_locked = client.post("/api/auth/login", json={"email": email, "password": correct_password})
+    assert res_locked.status_code == 429
+
+    # SIMULATE SERVER RESTART / NEW WORKER:
+    # 1. Instantiate a fresh PersistentAuthRateLimiter instance (all in-memory dicts empty)
+    fresh_limiter = PersistentAuthRateLimiter()
+    assert len(fresh_limiter._lockouts) == 0
+    assert len(fresh_limiter._failed_attempts) == 0
+
+    # 2. Query fresh instance directly
+    import asyncio
+    is_locked, retry_after = asyncio.run(fresh_limiter.is_account_locked(email))
+    assert is_locked is True
+    assert retry_after > 0
+
+    # 3. Request via client continues to be blocked by DB-backed lockout
+    res_after_restart = client.post("/api/auth/login", json={"email": email, "password": correct_password})
+    assert res_after_restart.status_code == 429
+    print("\n[PASS] Test 12: Rate limit state persists across server restart and fresh worker instances.")
+
+def test_persistent_rate_limiter_recovery_after_expiry():
+    """
+    Test 13: Legitimate user recovery after lockout expiration.
+    Verifies that when the lockout window elapses, the user can successfully log in
+    and the lockout state is automatically purged from persistent storage.
+    """
+    client = TestClient(app, base_url=BASE_URL)
+    rand_id = uuid.uuid4().hex[:6]
+    email = f"recovery_expiry_{rand_id}@example.com"
+    correct_password = "RecoveryPass123"
+
+    reg_res = client.post("/api/auth/signup", json={"email": email, "password": correct_password})
+    assert reg_res.status_code == 200
+
+    # Trigger lockout
+    for _ in range(5):
+        client.post("/api/auth/login", json={"email": email, "password": "WrongPassword"})
+
+    res_locked = client.post("/api/auth/login", json={"email": email, "password": correct_password})
+    assert res_locked.status_code == 429
+
+    # Manually expire the lockout in the persistent database table
+    import asyncio
+    async def expire_lock():
+        past_time = time.time() - 100
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE auth_rate_limits SET lockedUntil = ?, windowStart = ? WHERE key = ?",
+                (past_time, past_time, f"account:{email.lower()}")
+            )
+            await db.commit()
+
+    asyncio.run(expire_lock())
+
+    # User attempts login with correct password -> must succeed
+    login_res = client.post("/api/auth/login", json={"email": email, "password": correct_password})
+    assert login_res.status_code == 200
+    assert login_res.json()["token"] is not None
+
+    # Verify that record was purged from DB
+    async def check_purged():
+        async with get_db() as db:
+            cur = await db.execute("SELECT * FROM auth_rate_limits WHERE key = ?", (f"account:{email.lower()}",))
+            return await cur.fetchone()
+
+    row = asyncio.run(check_purged())
+    assert row is None, "auth_rate_limits record should be purged after successful login"
+    print("\n[PASS] Test 13: Legitimate recovery after lockout expiry verified.")
+
+def test_owner_mfa_required_but_unenrolled_blocks_admin_routes():
+    """
+    Test 14: REQUIRE_OWNER_MFA enforcement on unenrolled owner.
+    When REQUIRE_OWNER_MFA is True, an unenrolled owner who authenticates
+    must be blocked from /api/owner/* routes with HTTP 403 (MFA_ENROLLMENT_REQUIRED)
+    until they complete MFA enrollment.
+    """
+    client = TestClient(app, base_url=BASE_URL)
+    owner_pass = "OwnerTestPass123"
+
+    # Reset owner to unenrolled state
+    import asyncio
+    from backend.app.security import hash_password
+    async def reset_owner_clean():
+        async with get_db() as db:
+            hashed = hash_password(owner_pass)
+            await db.execute(
+                "UPDATE users SET passwordHash = ?, mfaEnabled = 0, mfaSecret = NULL, mfaRecoveryCodes = NULL WHERE email = ? COLLATE NOCASE",
+                (hashed, settings.OWNER_EMAIL)
+            )
+            await db.commit()
+
+    asyncio.run(reset_owner_clean())
+
+    # Temporarily set REQUIRE_OWNER_MFA = True
+    orig_mfa_setting = getattr(settings, "REQUIRE_OWNER_MFA", False)
+    settings.REQUIRE_OWNER_MFA = True
+    try:
+        # Unenrolled owner logs in: succeeds with standard token to allow MFA setup
+        login_res = client.post("/api/auth/login", json={"email": settings.OWNER_EMAIL, "password": owner_pass})
+        assert login_res.status_code == 200
+        token = login_res.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Profile is accessible to set up MFA
+        me_res = client.get("/api/auth/me", headers=headers)
+        assert me_res.status_code == 200
+
+        # Owner route is strictly BLOCKED with 403 MFA_ENROLLMENT_REQUIRED
+        owner_res = client.get("/api/owner/overview", headers=headers)
+        assert owner_res.status_code == 403
+        assert "mfa_enrollment_required" in owner_res.json()["detail"].lower()
+    finally:
+        settings.REQUIRE_OWNER_MFA = orig_mfa_setting
+        asyncio.run(reset_owner_clean())
+
+    print("\n[PASS] Test 14: Unenrolled owner blocked from admin routes when REQUIRE_OWNER_MFA is active.")
+
+def test_persistent_rate_limiter_fails_closed_on_storage_outage():
+    """
+    Test 15: Fail-closed behavior on storage outage in production mode.
+    Verifies that if the database is unreachable or throws an error in production,
+    the limiter raises HTTP 503 instead of silently allowing brute force attempts.
+    """
+    from unittest.mock import patch
+    client = TestClient(app, base_url=BASE_URL)
+
+    orig_env = settings.APP_ENV
+    settings.APP_ENV = "production"
+    try:
+        with patch("backend.app.database.get_db") as mock_db:
+            mock_db.side_effect = Exception("Simulated DB connection failure")
+            res = client.post(
+                "/api/auth/login",
+                json={"email": "victim@example.com", "password": "AnyPassword123"}
+            )
+            # In production, must fail closed with 503 Service Unavailable
+            assert res.status_code == 503
+            assert "unavailable" in res.json()["detail"].lower()
+    finally:
+        settings.APP_ENV = orig_env
+
+    print("\n[PASS] Test 15: Fail-closed HTTP 503 behavior on persistent storage outage verified.")
+
+def test_generic_authentication_errors_prevent_user_enumeration():
+    """
+    Test 16: Generic authentication errors that do not disclose account existence.
+    Confirms identical 401 response status and detail for nonexistent vs existing accounts.
+    """
+    client = TestClient(app, base_url=BASE_URL)
+    rand_id = uuid.uuid4().hex[:6]
+    existing_email = f"existing_user_{rand_id}@example.com"
+    password = "CorrectPassword123"
+
+    # Register an account
+    client.post("/api/auth/signup", json={"email": existing_email, "password": password})
+
+    # 1. Existing account + bad password
+    bad_pass_res = client.post("/api/auth/login", json={"email": existing_email, "password": "WrongPassword"})
+
+    # 2. Non-existent account
+    nonexistent_res = client.post("/api/auth/login", json={"email": f"nosuchuser_{rand_id}@example.com", "password": "WrongPassword"})
+
+    assert bad_pass_res.status_code == 401
+    assert nonexistent_res.status_code == 401
+    assert bad_pass_res.json()["detail"] == nonexistent_res.json()["detail"] == "Invalid email or password"
+    print("\n[PASS] Test 16: Generic auth errors prevent user enumeration verified.")
+
+def test_concurrent_login_attempts_persistent_defense():
+    """
+    Test 17: Concurrent login attempts correctly handled in persistent shared storage.
+    """
+    import concurrent.futures
+    client = TestClient(app, base_url=BASE_URL)
+    rand_id = uuid.uuid4().hex[:6]
+    target_email = f"concurrency_target_{rand_id}@example.com"
+
+    client.post("/api/auth/signup", json={"email": target_email, "password": "RealPassword123"})
+
+    def send_attempt():
+        return client.post("/api/auth/login", json={"email": target_email, "password": "BadPassword"})
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(send_attempt) for _ in range(8)]
+        results = [f.result().status_code for f in futures]
+
+    # At least some of the attempts beyond threshold must encounter 429
+    assert 429 in results, f"Expected 429 in concurrency results: {results}"
+    print("\n[PASS] Test 17: Concurrent login attempts persistent defense verified.")
+

@@ -18,7 +18,7 @@ from backend.app.models import (
 )
 from backend.app.services.user_service import user_service, row_to_user_dict
 from backend.app.deps import get_current_user
-from backend.app.security import rate_limiter, get_client_ip
+from backend.app.security import rate_limiter, auth_rate_limiter, get_client_ip
 from backend.app.config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -27,11 +27,17 @@ bearer_scheme = HTTPBearer(auto_error=False)
 @router.post("/signup", response_model=AuthResponse)
 async def signup(data: UserRegisterRequest, request: Request, response: Response):
     client_ip = get_client_ip(request)
-    allowed, retry_after = rate_limiter.is_allowed(f"signup:{client_ip}", max_limit=10)
+    allowed, retry_after = await auth_rate_limiter.check_and_increment_ip(
+        client_ip=client_ip,
+        action="signup",
+        max_limit=10,
+        window_seconds=getattr(settings, "RATE_LIMIT_WINDOW_SECONDS", 60)
+    )
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many registration attempts. Please try again in {retry_after} seconds."
+            detail=f"Too many registration attempts. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)}
         )
 
     user_agent = request.headers.get("User-Agent")
@@ -59,7 +65,12 @@ async def signup(data: UserRegisterRequest, request: Request, response: Response
 async def login(data: UserLoginRequest, request: Request, response: Response):
     client_ip = get_client_ip(request)
     ip_limit = getattr(settings, "AUTH_IP_MAX_LOGIN_ATTEMPTS", 10)
-    allowed, retry_after = rate_limiter.is_allowed(f"login:{client_ip}", max_limit=ip_limit)
+    allowed, retry_after = await auth_rate_limiter.check_and_increment_ip(
+        client_ip=client_ip,
+        action="login",
+        max_limit=ip_limit,
+        window_seconds=getattr(settings, "RATE_LIMIT_WINDOW_SECONDS", 60)
+    )
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -207,11 +218,17 @@ async def mfa_disable(
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(data: ForgotPasswordRequest, request: Request):
     client_ip = get_client_ip(request)
-    allowed, retry_after = rate_limiter.is_allowed(f"forgot:{client_ip}", max_limit=5)
+    allowed, retry_after = await auth_rate_limiter.check_and_increment_ip(
+        client_ip=client_ip,
+        action="forgot",
+        max_limit=5,
+        window_seconds=getattr(settings, "RATE_LIMIT_WINDOW_SECONDS", 60)
+    )
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many requests. Please wait {retry_after} seconds."
+            detail=f"Too many requests. Please wait {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)}
         )
 
     user_agent = request.headers.get("User-Agent")

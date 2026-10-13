@@ -76,6 +76,8 @@ CAMEL_KEY_MAP = {
     "isrevoked": "isRevoked",
     "revokedat": "revokedAt",
     "revocationreason": "revocationReason",
+    "windowstart": "windowStart",
+    "lockeduntil": "lockedUntil",
 }
 
 class CaseInsensitiveRow(dict):
@@ -582,6 +584,18 @@ async def create_tables():
                 except Exception:
                     pass
 
+            # Persistent distributed rate limiting and account lockout
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                key VARCHAR(255) PRIMARY KEY,
+                attempts INTEGER NOT NULL DEFAULT 1,
+                windowStart DOUBLE PRECISION NOT NULL,
+                lockedUntil DOUBLE PRECISION NOT NULL DEFAULT 0,
+                updatedAt DOUBLE PRECISION NOT NULL
+            );
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_lockedUntil ON auth_rate_limits(lockedUntil);")
+
             await db.commit()
 
         else:
@@ -887,5 +901,17 @@ async def create_tables():
                 await db.execute("ALTER TABLE users ADD COLUMN mfaRecoveryCodes TEXT")
             if "tokenrevocationtimestamp" not in existing_cols:
                 await db.execute("ALTER TABLE users ADD COLUMN tokenRevocationTimestamp TEXT")
+
+            # Persistent distributed rate limiting and account lockout
+            await db.execute("""
+            CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                key TEXT PRIMARY KEY,
+                attempts INTEGER NOT NULL DEFAULT 1,
+                windowStart REAL NOT NULL,
+                lockedUntil REAL NOT NULL DEFAULT 0,
+                updatedAt REAL NOT NULL
+            );
+            """)
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_lockedUntil ON auth_rate_limits(lockedUntil);")
 
             await db.commit()

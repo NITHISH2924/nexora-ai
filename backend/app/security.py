@@ -1,3 +1,4 @@
+import os
 import time
 import secrets
 import bcrypt
@@ -123,74 +124,242 @@ rate_limiter = RateLimiter(
     max_requests=settings.RATE_LIMIT_MAX_REQUESTS
 )
 
-class AuthRateLimiter:
+import logging
+logger = logging.getLogger("security")
+
+class PersistentAuthRateLimiter:
     """
-    Two-tier brute-force defense limiter:
-    - Account-level consecutive failure lockout
-    - IP-level rate limiting
+    Production-grade shared persistent rate limiter backed by PostgreSQL / SQLite.
+    Persists attempt counters and temporary lockout state across application restarts
+    and multiple concurrent workers.
+    Fails safely/closed if persistent storage is unreachable.
     """
     def __init__(self):
+        # In-memory dictionaries preserved for test compatibility & cache inspection
         self._failed_attempts: Dict[str, List[float]] = {}
         self._lockouts: Dict[str, float] = {}
 
-    def is_account_locked(self, email: str) -> Tuple[bool, int]:
+    async def is_account_locked(self, email: str) -> Tuple[bool, int]:
+        """Check if an account is temporarily locked due to consecutive failures."""
         clean_email = email.strip().lower()
+        key = f"account:{clean_email}"
         now = time.time()
-        
-        # Check active lockout
-        lockout_expiry = self._lockouts.get(clean_email, 0)
-        if lockout_expiry > now:
-            return True, int(lockout_expiry - now) + 1
-        elif clean_email in self._lockouts:
-            self._lockouts.pop(clean_email, None)
-            self._failed_attempts.pop(clean_email, None)
 
-        # Check consecutive failures within window
+        try:
+            from backend.app.database import get_db
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT lockedUntil FROM auth_rate_limits WHERE key = ?",
+                    (key,)
+                )
+                row = await cursor.fetchone()
+                if row:
+                    locked_until = float(row["lockedUntil"] or 0)
+                    if locked_until > now:
+                        retry_after = int(locked_until - now) + 1
+                        self._lockouts[clean_email] = locked_until
+                        return True, retry_after
+                    elif locked_until > 0:
+                        # Lockout has expired: reset lockout in DB
+                        await db.execute(
+                            "UPDATE auth_rate_limits SET lockedUntil = 0, attempts = 0, updatedAt = ? WHERE key = ?",
+                            (now, key)
+                        )
+                        await db.commit()
+                        self._lockouts.pop(clean_email, None)
+                        self._failed_attempts.pop(clean_email, None)
+            return False, 0
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error checking persistent account lockout for {clean_email[:2]}***: {e}")
+            if settings.APP_ENV == "production" or os.getenv("RENDER"):
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable. Please try again shortly."
+                )
+            return False, 0
+
+    async def record_failure(self, email: str) -> Tuple[bool, int, int]:
+        """
+        Record failed login attempt in persistent store.
+        Returns (is_locked, lockout_seconds, current_failure_count).
+        """
+        clean_email = email.strip().lower()
+        key = f"account:{clean_email}"
+        now = time.time()
         window = getattr(settings, "AUTH_LOCKOUT_DURATION_SECONDS", 300)
         max_failures = getattr(settings, "AUTH_MAX_FAILED_ATTEMPTS", 5)
-        failures = self._failed_attempts.get(clean_email, [])
-        valid_failures = [t for t in failures if now - t < window]
-        self._failed_attempts[clean_email] = valid_failures
 
-        if len(valid_failures) >= max_failures:
-            # Lock out account
-            self._lockouts[clean_email] = now + window
-            return True, window
+        try:
+            from backend.app.database import get_db
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT attempts, windowStart, lockedUntil FROM auth_rate_limits WHERE key = ?",
+                    (key,)
+                )
+                row = await cursor.fetchone()
 
-        return False, 0
+                if row:
+                    window_start = float(row["windowStart"] or now)
+                    locked_until = float(row["lockedUntil"] or 0)
 
-    def record_failure(self, email: str) -> int:
+                    if locked_until > now:
+                        retry_after = int(locked_until - now) + 1
+                        self._lockouts[clean_email] = locked_until
+                        return True, retry_after, int(row["attempts"])
+
+                    if (now - window_start) < window:
+                        new_attempts = int(row["attempts"] or 0) + 1
+                        if new_attempts >= max_failures:
+                            new_locked_until = now + window
+                            await db.execute(
+                                "UPDATE auth_rate_limits SET attempts = ?, lockedUntil = ?, updatedAt = ? WHERE key = ?",
+                                (new_attempts, new_locked_until, now, key)
+                            )
+                            await db.commit()
+                            self._lockouts[clean_email] = new_locked_until
+                            return True, window, new_attempts
+                        else:
+                            await db.execute(
+                                "UPDATE auth_rate_limits SET attempts = ?, updatedAt = ? WHERE key = ?",
+                                (new_attempts, now, key)
+                            )
+                            await db.commit()
+                            return False, 0, new_attempts
+                    else:
+                        # Previous window expired: start new sliding window
+                        await db.execute(
+                            "UPDATE auth_rate_limits SET attempts = 1, windowStart = ?, lockedUntil = 0, updatedAt = ? WHERE key = ?",
+                            (now, now, key)
+                        )
+                        await db.commit()
+                        self._lockouts.pop(clean_email, None)
+                        return False, 0, 1
+                else:
+                    await db.execute(
+                        "INSERT INTO auth_rate_limits (key, attempts, windowStart, lockedUntil, updatedAt) VALUES (?, 1, ?, 0, ?)",
+                        (key, now, now)
+                    )
+                    await db.commit()
+                    return False, 0, 1
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error recording persistent failure count for {clean_email[:2]}***: {e}")
+            if settings.APP_ENV == "production" or os.getenv("RENDER"):
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable. Please try again shortly."
+                )
+            return False, 0, 1
+
+    async def record_success(self, email: str):
+        """Reset failure counter and active lockout on successful authentication."""
         clean_email = email.strip().lower()
-        now = time.time()
-        window = getattr(settings, "AUTH_LOCKOUT_DURATION_SECONDS", 300)
-        max_failures = getattr(settings, "AUTH_MAX_FAILED_ATTEMPTS", 5)
-
-        failures = self._failed_attempts.get(clean_email, [])
-        valid_failures = [t for t in failures if now - t < window]
-        valid_failures.append(now)
-        self._failed_attempts[clean_email] = valid_failures
-
-        if len(valid_failures) >= max_failures:
-            self._lockouts[clean_email] = now + window
-
-        return len(valid_failures)
-
-    def record_success(self, email: str):
-        clean_email = email.strip().lower()
+        key = f"account:{clean_email}"
         self._failed_attempts.pop(clean_email, None)
         self._lockouts.pop(clean_email, None)
+        try:
+            from backend.app.database import get_db
+            async with get_db() as db:
+                await db.execute("DELETE FROM auth_rate_limits WHERE key = ?", (key,))
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error resetting persistent lockout on success for {clean_email[:2]}***: {e}")
+
+    async def check_and_increment_ip(
+        self,
+        client_ip: str,
+        action: str = "login",
+        max_limit: Optional[int] = None,
+        window_seconds: Optional[int] = None
+    ) -> Tuple[bool, int]:
+        """
+        Enforce persistent IP-based rate limiting across all workers.
+        Returns (is_allowed, retry_after).
+        """
+        key = f"ip:{client_ip.strip()}:{action}"
+        now = time.time()
+        limit = max_limit or getattr(settings, "AUTH_IP_MAX_LOGIN_ATTEMPTS", 10)
+        win = window_seconds or getattr(settings, "RATE_LIMIT_WINDOW_SECONDS", 60)
+
+        try:
+            from backend.app.database import get_db
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT attempts, windowStart, lockedUntil FROM auth_rate_limits WHERE key = ?",
+                    (key,)
+                )
+                row = await cursor.fetchone()
+
+                if row:
+                    window_start = float(row["windowStart"] or now)
+                    locked_until = float(row["lockedUntil"] or 0)
+
+                    if locked_until > now:
+                        return False, int(locked_until - now) + 1
+
+                    if (now - window_start) < win:
+                        new_attempts = int(row["attempts"] or 0) + 1
+                        if new_attempts > limit:
+                            retry_after = int(win - (now - window_start)) + 1
+                            new_locked = now + retry_after
+                            await db.execute(
+                                "UPDATE auth_rate_limits SET attempts = ?, lockedUntil = ?, updatedAt = ? WHERE key = ?",
+                                (new_attempts, new_locked, now, key)
+                            )
+                            await db.commit()
+                            return False, retry_after
+                        else:
+                            await db.execute(
+                                "UPDATE auth_rate_limits SET attempts = ?, updatedAt = ? WHERE key = ?",
+                                (new_attempts, now, key)
+                            )
+                            await db.commit()
+                            return True, 0
+                    else:
+                        await db.execute(
+                            "UPDATE auth_rate_limits SET attempts = 1, windowStart = ?, lockedUntil = 0, updatedAt = ? WHERE key = ?",
+                            (now, now, key)
+                        )
+                        await db.commit()
+                        return True, 0
+                else:
+                    await db.execute(
+                        "INSERT INTO auth_rate_limits (key, attempts, windowStart, lockedUntil, updatedAt) VALUES (?, 1, ?, 0, ?)",
+                        (key, now, now)
+                    )
+                    await db.commit()
+                    return True, 0
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error checking persistent IP rate limit for {client_ip}: {e}")
+            if settings.APP_ENV == "production" or os.getenv("RENDER"):
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable. Please try again shortly."
+                )
+            return True, 0
+
+    async def clear_all(self):
+        """Purge all rate limits from database and memory."""
+        self._lockouts.clear()
+        self._failed_attempts.clear()
+        try:
+            from backend.app.database import get_db
+            async with get_db() as db:
+                await db.execute("DELETE FROM auth_rate_limits")
+                await db.commit()
+        except Exception:
+            pass
 
     def cleanup(self):
-        now = time.time()
-        expired_locks = [k for k, v in self._lockouts.items() if v <= now]
-        for k in expired_locks:
-            self._lockouts.pop(k, None)
-        window = getattr(settings, "AUTH_LOCKOUT_DURATION_SECONDS", 300)
-        stale_accts = [k for k, v in self._failed_attempts.items() if not v or (now - v[-1] > window * 2)]
-        for k in stale_accts:
-            self._failed_attempts.pop(k, None)
+        """No-op cleanup kept for backwards compatibility."""
+        pass
 
-auth_rate_limiter = AuthRateLimiter()
+auth_rate_limiter = PersistentAuthRateLimiter()
 
 # ------------------------------------------------------------------------------
 # Secure Client IP Resolution & Trusted Proxy Validation

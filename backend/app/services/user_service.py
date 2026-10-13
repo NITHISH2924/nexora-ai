@@ -405,7 +405,7 @@ class UserService:
         clean_email = data.email.strip().lower()
 
         # 1. Check account-level lockout
-        locked, retry_after = auth_rate_limiter.is_account_locked(clean_email)
+        locked, retry_after = await auth_rate_limiter.is_account_locked(clean_email)
         if locked:
             async with get_db() as db:
                 await cls.log_activity(
@@ -426,7 +426,7 @@ class UserService:
         
         # 2. Verify credentials
         if not user or not verify_password(data.password, user["passwordHash"]):
-            failure_count = auth_rate_limiter.record_failure(clean_email)
+            is_locked, lock_seconds, failure_count = await auth_rate_limiter.record_failure(clean_email)
             async with get_db() as db:
                 uid = user["userId"] if user else "anonymous"
                 await cls.log_activity(
@@ -437,8 +437,7 @@ class UserService:
                     ip_address,
                     user_agent
                 )
-            now_locked, lock_seconds = auth_rate_limiter.is_account_locked(clean_email)
-            if now_locked:
+            if is_locked:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"Too many failed login attempts. Account temporarily locked for {lock_seconds} seconds.",
@@ -450,7 +449,7 @@ class UserService:
             )
 
         # 3. Successful password verification
-        auth_rate_limiter.record_success(clean_email)
+        await auth_rate_limiter.record_success(clean_email)
 
         # 4. Check account suspension
         if user["accountStatus"] == "SUSPENDED":

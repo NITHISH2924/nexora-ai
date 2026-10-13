@@ -88,7 +88,7 @@ class Settings:
     AUTH_MAX_FAILED_ATTEMPTS: int = int(os.getenv("AUTH_MAX_FAILED_ATTEMPTS", "5"))
     AUTH_LOCKOUT_DURATION_SECONDS: int = int(os.getenv("AUTH_LOCKOUT_DURATION_SECONDS", "300")) # 5 min lockout
     AUTH_IP_MAX_LOGIN_ATTEMPTS: int = int(os.getenv("AUTH_IP_MAX_LOGIN_ATTEMPTS", "10"))
-    REQUIRE_OWNER_MFA: bool = os.getenv("REQUIRE_OWNER_MFA", "true").lower() in ("true", "1", "yes")
+    REQUIRE_OWNER_MFA: bool = os.getenv("REQUIRE_OWNER_MFA", "true" if APP_ENV == "production" else "false").lower() in ("true", "1", "yes")
     MFA_TEMP_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("MFA_TEMP_TOKEN_EXPIRE_MINUTES", "5"))
 
     # Code Execution Sandbox Hardening

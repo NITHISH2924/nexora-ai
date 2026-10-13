@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from backend.app.config import settings
 from backend.app.security import decode_access_token, hash_token
 from backend.app.services.user_service import user_service, row_to_user_dict
 
@@ -111,5 +112,10 @@ async def get_current_owner(current_user: dict = Depends(get_current_user)) -> d
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: Leadership (Owner/CEO) role required"
+        )
+    if getattr(settings, "REQUIRE_OWNER_MFA", False) and not current_user.get("mfaEnabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA_ENROLLMENT_REQUIRED: Two-factor authentication must be enrolled and enabled to access owner administration features."
         )
     return current_user
