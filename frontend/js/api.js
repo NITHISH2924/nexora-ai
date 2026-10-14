@@ -110,6 +110,12 @@ async function request(endpoint, options = {}) {
       data = { detail: await response.text() };
     }
 
+    if (response.status === 503 && !options._isRetry) {
+      // Transparent automatic retry when service/database is waking up from idle sleep
+      await new Promise(r => setTimeout(r, 2000));
+      return await request(endpoint, { ...options, _isRetry: true });
+    }
+
     if (!response.ok) {
       let errorMsg = 'An unexpected error occurred';
       if (data && data.detail) {

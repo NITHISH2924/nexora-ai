@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Any, Optional, Dict, List
+import urllib.parse
+from fastapi import HTTPException, status
 import aiosqlite
 
 try:
@@ -17,6 +19,34 @@ except ImportError:
 from backend.app.config import settings
 
 logger = logging.getLogger("database")
+
+class DatabaseUnavailableError(HTTPException):
+    """Raised when the persistent production database is unreachable."""
+    def __init__(self, detail: str = "Database service is temporarily unavailable. Please retry in a few moments."):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail,
+            headers={"Retry-After": "5"}
+        )
+
+def mask_database_url(url: str) -> str:
+    """Mask credentials in database URL to prevent secret leakage in logs."""
+    if not url:
+        return ""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.password:
+            netloc = f"{parsed.username or ''}:***@{parsed.hostname or ''}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            return urllib.parse.urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+        return url
+    except Exception:
+        return "postgresql://***"
+
+ADVISORY_LOCK_ID = 847291
+_sqlite_migration_lock = asyncio.Lock()
+_db_initialized_event = asyncio.Event()
 
 # Canonical camelCase mapping for case-insensitive column lookups in PostgreSQL
 CAMEL_KEY_MAP = {
@@ -285,58 +315,336 @@ class PgConnectionWrapper:
     async def close(self):
         await self._conn.close()
 
+PG_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS users (
+    userId TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    passwordHash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'USER' CHECK(role IN ('USER', 'OWNER', 'CEO', 'ADMIN')),
+    accountCreatedAt TEXT NOT NULL,
+    lastLoginAt TEXT,
+    loginCount INTEGER NOT NULL DEFAULT 0,
+    accountStatus TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(accountStatus IN ('ACTIVE', 'PENDING_VERIFICATION', 'SUSPENDED')),
+    emailVerified INTEGER NOT NULL DEFAULT 0,
+    emailVerificationToken TEXT,
+    emailVerificationTokenExpires TEXT,
+    passwordResetToken TEXT,
+    passwordResetTokenExpires TEXT,
+    mfaEnabled INTEGER NOT NULL DEFAULT 0,
+    mfaSecret TEXT,
+    mfaRecoveryCodes TEXT,
+    tokenRevocationTimestamp TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfaEnabled INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfaSecret TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfaRecoveryCodes TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tokenRevocationTimestamp TEXT;
+
+CREATE TABLE IF NOT EXISTS active_sessions (
+    sessionId TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    tokenHash TEXT UNIQUE NOT NULL,
+    ipAddress TEXT,
+    userAgent TEXT,
+    createdAt TEXT NOT NULL,
+    lastSeenAt TEXT NOT NULL,
+    expiresAt TEXT NOT NULL,
+    isRevoked INTEGER NOT NULL DEFAULT 0,
+    revokedAt TEXT,
+    revocationReason TEXT,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_tokenHash ON active_sessions(tokenHash);
+CREATE INDEX IF NOT EXISTS idx_sessions_userId ON active_sessions(userId);
+CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt ON active_sessions(expiresAt);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    userId TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT,
+    ipAddress TEXT,
+    userAgent TEXT,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_audit_userId ON audit_logs(userId);
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT 'gemini-1.5-flash',
+    systemPrompt TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    isPinned INTEGER NOT NULL DEFAULT 0,
+    isArchived INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_conv_userId ON conversations(userId);
+CREATE INDEX IF NOT EXISTS idx_conv_updatedAt ON conversations(updatedAt);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    conversationId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    model TEXT,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (conversationId) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_msg_convId ON messages(conversationId);
+CREATE INDEX IF NOT EXISTS idx_msg_userId ON messages(userId);
+CREATE INDEX IF NOT EXISTS idx_msg_createdAt ON messages(createdAt);
+
+CREATE TABLE IF NOT EXISTS files (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    originalFilename TEXT NOT NULL,
+    fileType TEXT NOT NULL,
+    mimeType TEXT NOT NULL,
+    fileSize INTEGER NOT NULL,
+    storagePath TEXT NOT NULL,
+    extractedText TEXT,
+    summary TEXT,
+    pageCount INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_files_userId ON files(userId);
+CREATE INDEX IF NOT EXISTS idx_files_createdAt ON files(createdAt);
+
+CREATE TABLE IF NOT EXISTS generated_images (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    negativePrompt TEXT,
+    model TEXT NOT NULL DEFAULT 'dall-e-3',
+    aspectRatio TEXT NOT NULL DEFAULT '1:1',
+    style TEXT NOT NULL DEFAULT 'photorealistic',
+    imagePath TEXT NOT NULL,
+    imageUrl TEXT NOT NULL,
+    fileSize INTEGER NOT NULL DEFAULT 0,
+    width INTEGER NOT NULL DEFAULT 1024,
+    height INTEGER NOT NULL DEFAULT 1024,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_gen_images_userId ON generated_images(userId);
+
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    instructions TEXT,
+    color TEXT NOT NULL DEFAULT '#8B5CF6',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_projects_userId ON projects(userId);
+CREATE INDEX IF NOT EXISTS idx_projects_updatedAt ON projects(updatedAt);
+
+CREATE TABLE IF NOT EXISTS project_notes (
+    id TEXT PRIMARY KEY,
+    projectId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_proj_notes_projId ON project_notes(projectId);
+CREATE INDEX IF NOT EXISTS idx_proj_notes_userId ON project_notes(userId);
+
+CREATE TABLE IF NOT EXISTS project_saved_outputs (
+    id TEXT PRIMARY KEY,
+    projectId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    outputType TEXT NOT NULL DEFAULT 'text',
+    content TEXT NOT NULL,
+    metadata TEXT,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_proj_outputs_projId ON project_saved_outputs(projectId);
+CREATE INDEX IF NOT EXISTS idx_proj_outputs_userId ON project_saved_outputs(userId);
+
+CREATE TABLE IF NOT EXISTS project_items (
+    id TEXT PRIMARY KEY,
+    projectId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    itemType TEXT NOT NULL CHECK(itemType IN ('chat', 'file')),
+    itemId TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE,
+    UNIQUE (projectId, itemType, itemId)
+);
+CREATE INDEX IF NOT EXISTS idx_proj_items_projId ON project_items(projectId);
+CREATE INDEX IF NOT EXISTS idx_proj_items_userId ON project_items(userId);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    userId TEXT PRIMARY KEY,
+    displayName TEXT,
+    preferredLanguage TEXT NOT NULL DEFAULT 'English',
+    theme TEXT NOT NULL DEFAULT 'system',
+    aiTone TEXT NOT NULL DEFAULT 'balanced',
+    customInstructions TEXT,
+    autoSpeakAudio INTEGER NOT NULL DEFAULT 0,
+    codeTheme TEXT NOT NULL DEFAULT 'atom-one-dark',
+    enableMemory INTEGER NOT NULL DEFAULT 1,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_memories (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'preference',
+    isActive INTEGER NOT NULL DEFAULT 1,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_memories_userId ON user_memories(userId);
+
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+    key VARCHAR(255) PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    windowStart DOUBLE PRECISION NOT NULL,
+    lockedUntil DOUBLE PRECISION NOT NULL DEFAULT 0,
+    updatedAt DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_lockedUntil ON auth_rate_limits(lockedUntil);
+"""
+
+async def check_db_readiness() -> dict:
+    """
+    Probe the actual production database to confirm it is reachable.
+    Returns readiness dictionary without exposing credentials.
+    """
+    if is_postgres():
+        if psycopg is None:
+            return {
+                "status": "not_ready",
+                "database": "unavailable",
+                "type": "postgresql",
+                "detail": "PostgreSQL driver psycopg is missing."
+            }
+        conn_str = get_normalized_pg_url()
+        if "connect_timeout" not in conn_str:
+            sep = "&" if "?" in conn_str else "?"
+            conn_str = f"{conn_str}{sep}connect_timeout=3"
+        try:
+            raw_conn = await asyncio.wait_for(
+                psycopg.AsyncConnection.connect(conn_str, row_factory=dict_row),
+                timeout=4.0
+            )
+            async with raw_conn:
+                cur = raw_conn.cursor()
+                await cur.execute("SELECT 1 AS ready;")
+                row = await cur.fetchone()
+                if row and (row.get("ready") == 1 or row.get("ready") == "1"):
+                    return {
+                        "status": "ready",
+                        "database": "connected",
+                        "type": "postgresql"
+                    }
+        except Exception as e:
+            logger.warning(f"Database readiness probe failed: {type(e).__name__}")
+            return {
+                "status": "not_ready",
+                "database": "unavailable",
+                "type": "postgresql",
+                "detail": "PostgreSQL database is currently unreachable or waking up."
+            }
+        return {
+            "status": "not_ready",
+            "database": "unavailable",
+            "type": "postgresql"
+        }
+    else:
+        try:
+            async with aiosqlite.connect(settings.DATABASE_PATH) as db:
+                cur = await db.execute("SELECT 1 AS ready;")
+                row = await cur.fetchone()
+                if row:
+                    return {
+                        "status": "ready",
+                        "database": "connected",
+                        "type": "sqlite"
+                    }
+        except Exception as e:
+            return {
+                "status": "not_ready",
+                "database": "unavailable",
+                "type": "sqlite",
+                "detail": str(e)
+            }
+        return {"status": "ready", "database": "connected", "type": "sqlite"}
+
 @asynccontextmanager
 async def get_db() -> AsyncGenerator[Any, None]:
     """
     Unified async database connection manager.
-    Automatically connects to PostgreSQL if DATABASE_URL is provided,
-    otherwise falls back cleanly to local aiosqlite.
-    Includes connection timeout and graceful SQLite fallback to ensure
-    production 100% uptime and prevent 502 Bad Gateway outages.
+    Connects to PostgreSQL if DATABASE_URL is configured, otherwise connects to local aiosqlite.
+    CRITICAL: Never silently falls back to SQLite when DATABASE_URL is configured for PostgreSQL,
+    preventing persistent data loss in production.
     """
     init_db_sync()
 
     if is_postgres():
         if psycopg is None:
-            logger.warning("PostgreSQL driver 'psycopg' is not installed. Falling back to SQLite.")
-            db = await aiosqlite.connect(settings.DATABASE_PATH)
-            db.row_factory = aiosqlite.Row
-            await db.execute("PRAGMA foreign_keys = ON;")
-            try:
-                yield db
-            finally:
-                await db.close()
-            return
+            logger.error("PostgreSQL driver 'psycopg' is missing while DATABASE_URL is configured.")
+            raise DatabaseUnavailableError("Production database driver unavailable.")
 
         conn_str = get_normalized_pg_url()
         if "connect_timeout" not in conn_str:
             sep = "&" if "?" in conn_str else "?"
-            conn_str = f"{conn_str}{sep}connect_timeout=5"
+            conn_str = f"{conn_str}{sep}connect_timeout=4"
 
-        try:
-            raw_conn = await asyncio.wait_for(
-                psycopg.AsyncConnection.connect(conn_str, row_factory=dict_row),
-                timeout=6.0
-            )
-            wrapped = PgConnectionWrapper(raw_conn)
+        # Attempt connection with a quick retry if database is cold/waking up
+        last_error = None
+        for attempt in range(2):
             try:
-                yield wrapped
-            finally:
-                await wrapped.close()
-            return
-        except Exception as pg_err:
-            logger.error(
-                f"PostgreSQL connection to DATABASE_URL failed: {pg_err}. "
-                f"Falling back to local SQLite database at {settings.DATABASE_PATH} to maintain high availability."
-            )
-            db = await aiosqlite.connect(settings.DATABASE_PATH)
-            db.row_factory = aiosqlite.Row
-            await db.execute("PRAGMA foreign_keys = ON;")
-            try:
-                yield db
-            finally:
-                await db.close()
-            return
+                raw_conn = await asyncio.wait_for(
+                    psycopg.AsyncConnection.connect(conn_str, row_factory=dict_row),
+                    timeout=5.0
+                )
+                wrapped = PgConnectionWrapper(raw_conn)
+                try:
+                    yield wrapped
+                finally:
+                    await wrapped.close()
+                return
+            except Exception as pg_err:
+                last_error = pg_err
+                if attempt == 0:
+                    await asyncio.sleep(0.5)
+
+        masked = mask_database_url(conn_str)
+        logger.error(
+            f"PostgreSQL connection to DATABASE_URL failed: {masked} ({type(last_error).__name__}). "
+            "Refusing to write to ephemeral SQLite to prevent user data loss."
+        )
+        raise DatabaseUnavailableError(
+            "Database service is temporarily unavailable. Please retry in a few moments."
+        )
     else:
         db = await aiosqlite.connect(settings.DATABASE_PATH)
         db.row_factory = aiosqlite.Row
@@ -356,263 +664,39 @@ async def create_tables():
                 db._conn.autocommit = True
             except Exception:
                 pass
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                userId TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                passwordHash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'USER' CHECK(role IN ('USER', 'OWNER', 'CEO', 'ADMIN')),
-                accountCreatedAt TEXT NOT NULL,
-                lastLoginAt TEXT,
-                loginCount INTEGER NOT NULL DEFAULT 0,
-                accountStatus TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(accountStatus IN ('ACTIVE', 'PENDING_VERIFICATION', 'SUSPENDED')),
-                emailVerified INTEGER NOT NULL DEFAULT 0,
-                emailVerificationToken TEXT,
-                emailVerificationTokenExpires TEXT,
-                passwordResetToken TEXT,
-                passwordResetTokenExpires TEXT
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);")
 
-            # Column migrations for Stage 3 MFA & Session revocation
-            for col_name, col_sql in [
-                ("mfaEnabled", "INTEGER NOT NULL DEFAULT 0"),
-                ("mfaSecret", "TEXT"),
-                ("mfaRecoveryCodes", "TEXT"),
-                ("tokenRevocationTimestamp", "TEXT"),
-            ]:
+            lock_acquired = True
+            try:
+                cur = await db.execute(f"SELECT pg_try_advisory_lock({ADVISORY_LOCK_ID}) AS locked;")
+                row = await cur.fetchone()
+                if row and not row.get("locked"):
+                    lock_acquired = False
+                    logger.info("Database migration advisory lock is held by another worker. Skipping concurrent execution.")
+                    _db_initialized_event.set()
+                    return
+            except Exception as e:
+                logger.warning(f"Could not verify PostgreSQL advisory lock ({type(e).__name__}). Proceeding safely.")
+
+            try:
+                # Execute full batched schema DDL in a single network roundtrip
+                await db.execute(PG_SCHEMA_SQL)
+                logger.info("PostgreSQL database tables and indexes verified successfully.")
+            finally:
+                if lock_acquired:
+                    try:
+                        await db.execute(f"SELECT pg_advisory_unlock({ADVISORY_LOCK_ID});")
+                    except Exception:
+                        pass
                 try:
-                    await db.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_sql};")
+                    db._conn.autocommit = False
                 except Exception:
                     pass
 
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS active_sessions (
-                sessionId TEXT PRIMARY KEY,
-                userId TEXT NOT NULL,
-                tokenHash TEXT UNIQUE NOT NULL,
-                ipAddress TEXT,
-                userAgent TEXT,
-                createdAt TEXT NOT NULL,
-                lastSeenAt TEXT NOT NULL,
-                expiresAt TEXT NOT NULL,
-                isRevoked INTEGER NOT NULL DEFAULT 0,
-                revokedAt TEXT,
-                revocationReason TEXT,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_tokenHash ON active_sessions(tokenHash);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_userId ON active_sessions(userId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt ON active_sessions(expiresAt);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id SERIAL PRIMARY KEY,
-                userId TEXT NOT NULL,
-                action TEXT NOT NULL,
-                details TEXT,
-                ipAddress TEXT,
-                userAgent TEXT,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_audit_userId ON audit_logs(userId);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id TEXT PRIMARY KEY,
-                userId TEXT NOT NULL,
-                title TEXT NOT NULL,
-                model TEXT NOT NULL DEFAULT 'gemini-1.5-flash',
-                systemPrompt TEXT,
-                createdAt TEXT NOT NULL,
-                updatedAt TEXT NOT NULL,
-                isPinned INTEGER NOT NULL DEFAULT 0,
-                isArchived INTEGER NOT NULL DEFAULT 0,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_conv_userId ON conversations(userId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_conv_updatedAt ON conversations(updatedAt);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id TEXT PRIMARY KEY,
-                conversationId TEXT NOT NULL,
-                userId TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
-                content TEXT NOT NULL,
-                model TEXT,
-                tokens INTEGER NOT NULL DEFAULT 0,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (conversationId) REFERENCES conversations(id) ON DELETE CASCADE,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_msg_convId ON messages(conversationId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_msg_userId ON messages(userId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_msg_createdAt ON messages(createdAt);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS files (
-                id TEXT PRIMARY KEY,
-                userId TEXT NOT NULL,
-                filename TEXT NOT NULL,
-                originalFilename TEXT NOT NULL,
-                fileType TEXT NOT NULL,
-                mimeType TEXT NOT NULL,
-                fileSize INTEGER NOT NULL,
-                storagePath TEXT NOT NULL,
-                extractedText TEXT,
-                summary TEXT,
-                pageCount INTEGER NOT NULL DEFAULT 0,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_files_userId ON files(userId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_files_createdAt ON files(createdAt);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS generated_images (
-                id TEXT PRIMARY KEY,
-                userId TEXT NOT NULL,
-                prompt TEXT NOT NULL,
-                negativePrompt TEXT,
-                model TEXT NOT NULL DEFAULT 'dall-e-3',
-                aspectRatio TEXT NOT NULL DEFAULT '1:1',
-                style TEXT NOT NULL DEFAULT 'photorealistic',
-                imagePath TEXT NOT NULL,
-                imageUrl TEXT NOT NULL,
-                fileSize INTEGER NOT NULL DEFAULT 0,
-                width INTEGER NOT NULL DEFAULT 1024,
-                height INTEGER NOT NULL DEFAULT 1024,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_gen_images_userId ON generated_images(userId);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                userId TEXT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                instructions TEXT,
-                color TEXT NOT NULL DEFAULT '#8B5CF6',
-                createdAt TEXT NOT NULL,
-                updatedAt TEXT NOT NULL,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_projects_userId ON projects(userId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_projects_updatedAt ON projects(updatedAt);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS project_notes (
-                id TEXT PRIMARY KEY,
-                projectId TEXT NOT NULL,
-                userId TEXT NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                createdAt TEXT NOT NULL,
-                updatedAt TEXT NOT NULL,
-                FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_notes_projId ON project_notes(projectId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_notes_userId ON project_notes(userId);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS project_saved_outputs (
-                id TEXT PRIMARY KEY,
-                projectId TEXT NOT NULL,
-                userId TEXT NOT NULL,
-                title TEXT NOT NULL,
-                outputType TEXT NOT NULL DEFAULT 'text',
-                content TEXT NOT NULL,
-                metadata TEXT,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_outputs_projId ON project_saved_outputs(projectId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_outputs_userId ON project_saved_outputs(userId);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS project_items (
-                id TEXT PRIMARY KEY,
-                projectId TEXT NOT NULL,
-                userId TEXT NOT NULL,
-                itemType TEXT NOT NULL CHECK(itemType IN ('chat', 'file')),
-                itemId TEXT NOT NULL,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE,
-                UNIQUE (projectId, itemType, itemId)
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_items_projId ON project_items(projectId);")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_proj_items_userId ON project_items(userId);")
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_preferences (
-                userId TEXT PRIMARY KEY,
-                displayName TEXT,
-                preferredLanguage TEXT NOT NULL DEFAULT 'English',
-                theme TEXT NOT NULL DEFAULT 'system',
-                aiTone TEXT NOT NULL DEFAULT 'balanced',
-                customInstructions TEXT,
-                autoSpeakAudio INTEGER NOT NULL DEFAULT 0,
-                codeTheme TEXT NOT NULL DEFAULT 'atom-one-dark',
-                enableMemory INTEGER NOT NULL DEFAULT 1,
-                updatedAt TEXT NOT NULL,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_memories (
-                id TEXT PRIMARY KEY,
-                userId TEXT NOT NULL,
-                key TEXT NOT NULL,
-                value TEXT NOT NULL,
-                category TEXT NOT NULL DEFAULT 'preference',
-                isActive INTEGER NOT NULL DEFAULT 1,
-                createdAt TEXT NOT NULL,
-                updatedAt TEXT NOT NULL,
-                FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
-            );
-            """)
-            # Persistent distributed rate limiting and account lockout
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS auth_rate_limits (
-                key VARCHAR(255) PRIMARY KEY,
-                attempts INTEGER NOT NULL DEFAULT 1,
-                windowStart DOUBLE PRECISION NOT NULL,
-                lockedUntil DOUBLE PRECISION NOT NULL DEFAULT 0,
-                updatedAt DOUBLE PRECISION NOT NULL
-            );
-            """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_lockedUntil ON auth_rate_limits(lockedUntil);")
-
-            try:
-                db._conn.autocommit = False
-            except Exception:
-                pass
-            await db.commit()
-
         else:
-            # SQLite Schema
-            await db.execute("""
-            CREATE TABLE IF NOT EXISTS users (
+            # SQLite Schema with concurrency lock
+            async with _sqlite_migration_lock:
+                await db.execute("""
+                CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL COLLATE NOCASE,
                 passwordHash TEXT NOT NULL,
@@ -894,3 +978,4 @@ async def create_tables():
             await db.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_lockedUntil ON auth_rate_limits(lockedUntil);")
 
             await db.commit()
+    _db_initialized_event.set()

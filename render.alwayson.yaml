@@ -1,0 +1,48 @@
+# ==============================================================================
+# NEXORA AI - OPTIONAL ALWAYS-ON PRODUCTION BLUEPRINT (RENDER PAID PLAN)
+# ==============================================================================
+# Cost breakdown:
+# - Web Service: Starter plan ($7/month) -> Always-on, 512 MB RAM, 0.5 CPU, zero spin-down / cold starts
+# - PostgreSQL: Starter plan ($7/month)  -> Always-on, 256 MB RAM, 1 GB storage, persistent connections
+# Total: $14/month for 24/7 zero cold-start operation.
+#
+# To apply this blueprint on Render:
+# 1. In Render Dashboard, go to Blueprints -> New Blueprint Instance
+# 2. Point to this file (render.alwayson.yaml) or upgrade individual services to 'Starter'
+# ==============================================================================
+
+databases:
+  - name: nexora-postgres
+    databaseName: nexora_db
+    user: nexora_admin
+    plan: starter
+
+services:
+  - type: web
+    name: nexora-ai-platform
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips "127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECURE_COOKIES
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nexora-postgres
+          property: connectionString
+      - key: DATABASE_PATH
+        value: data/nexora_prod.db
+      - key: UPLOAD_DIR
+        value: data/uploads
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OWNER_EMAIL
+        value: owner@nexora.ai
+      - key: CEO_EMAIL
+        value: ceo@nexora.ai
+      - key: WEB_CONCURRENCY
+        value: "2"

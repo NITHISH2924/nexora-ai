@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, HTTPException, status
@@ -8,7 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.app.config import settings, BASE_DIR
-from backend.app.database import create_tables
+from backend.app.database import (
+    create_tables,
+    DatabaseUnavailableError,
+    check_db_readiness,
+    init_db_sync,
+)
 from backend.app.routes.auth import router as auth_router
 from backend.app.routes.user import router as user_router
 from backend.app.routes.owner import router as owner_router
@@ -23,18 +29,30 @@ from backend.app.routes.personalization import router as personalization_router
 logger = logging.getLogger("main")
 FRONTEND_DIR = BASE_DIR / "frontend"
 
+async def _startup_database_init():
+    """Background database initialization with resilient retries."""
+    for attempt in range(1, 6):
+        try:
+            await create_tables()
+            logger.info("Application startup: database tables verified successfully.")
+            return
+        except Exception as e:
+            logger.warning(f"Database table verification attempt {attempt}/5 failed: {type(e).__name__}. Retrying in 2s...")
+            await asyncio.sleep(2.0)
+    logger.critical("Database initialization could not complete after 5 attempts. Requests will fail safe.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Ensure database & tables exist
-    try:
-        await create_tables()
-        logger.info("Application startup: database tables verified successfully.")
-    except Exception as e:
-        logger.critical(f"Database initialization error during startup: {e}", exc_info=True)
-        # Even if create_tables encounters an error, DO NOT let the ASGI server crash!
-        # The web application MUST bind to the port and serve health checks, login, signup, and error pages.
+    # Ensure storage directories exist synchronously
+    init_db_sync()
+    # Trigger database initialization as a background task so Uvicorn
+    # immediately binds to $PORT without waiting for remote database wake-up.
+    # This eliminates Render cold-start 502 Bad Gateway timeouts.
+    init_task = asyncio.create_task(_startup_database_init())
+    logger.info("Application startup: HTTP listener starting immediately; database initialization running in background.")
     yield
-    # Shutdown: Cleanup if needed
+    if not init_task.done():
+        init_task.cancel()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -130,6 +148,21 @@ async def health_check():
         "version": "1.0.0"
     }
 
+# Dedicated Database Readiness Check Endpoint (Separate from process /api/health)
+@app.get("/api/health/db", tags=["Health"])
+@app.get("/api/ready", tags=["Health"])
+async def database_readiness():
+    """Reports whether the intended persistent production database is reachable."""
+    report = await check_db_readiness()
+    is_ready = report.get("status") == "ready"
+    status_code = 200 if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    headers = {"Retry-After": "5"} if not is_ready else None
+    return JSONResponse(
+        status_code=status_code,
+        content=report,
+        headers=headers
+    )
+
 
 
 # Mount static asset folders if they exist
@@ -187,6 +220,15 @@ async def serve_delete_account():
 
 
 # Global Exception Handlers for clean sanitized error responses (no stack trace exposure)
+@app.exception_handler(DatabaseUnavailableError)
+async def database_unavailable_exception_handler(request: Request, exc: DatabaseUnavailableError):
+    logger.warning(f"Database unavailable for {request.method} {request.url.path}: {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "detail": exc.detail},
+        headers=exc.headers
+    )
+
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
