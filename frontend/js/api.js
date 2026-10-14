@@ -684,11 +684,57 @@ const voiceApi = {
     });
   },
 
-  async pipeline({ audioBase64 = null, text = null, voice = 'onyx', model = null, systemPrompt = null } = {}) {
+  async pipeline({ audioBase64 = null, text = null, voice = 'onyx', model = null, systemPrompt = null, conversationId = null } = {}) {
     return request('/voice/pipeline', {
       method: 'POST',
-      body: JSON.stringify({ audioBase64, text, voice, model, systemPrompt })
+      body: JSON.stringify({ audioBase64, text, voice, model, systemPrompt, conversationId })
     });
+  }
+};
+
+// Phase 5: Local Windows PC Companion Client (http://127.0.0.1:8765)
+const pcCompanionApi = {
+  baseUrl: 'http://127.0.0.1:8765',
+
+  async checkStatus() {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1800);
+      const res = await fetch(`${this.baseUrl}/status`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) return { online: false };
+      const data = await res.json();
+      return { online: true, ...data };
+    } catch (e) {
+      return { online: false, error: e.message };
+    }
+  },
+
+  async executeAction(action, target = null, confirmed = false, token = null) {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, target, confirmed, token })
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, ...data };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  },
+
+  async getSystemStats() {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/system-stats`, { method: 'GET' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
   }
 };
 
@@ -826,6 +872,7 @@ window.filesApi = filesApi;
 window.toolsApi = toolsApi;
 window.imageGenApi = imageGenApi;
 window.voiceApi = voiceApi;
+window.pcCompanionApi = pcCompanionApi;
 window.projectsApi = projectsApi;
 window.personalizationApi = personalizationApi;
 window.TokenManager = TokenManager;

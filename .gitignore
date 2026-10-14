@@ -11,7 +11,8 @@ venv/
 
 # Binaries & Executables
 *.exe
-bin/
+bin/*
+!bin/pc_companion.py
 
 # Environment Variables & Secrets
 .env

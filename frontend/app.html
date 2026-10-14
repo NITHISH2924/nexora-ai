@@ -1773,6 +1773,12 @@ print(f"Prime numbers up to 50: {calculate_primes()}")
               <input type="checkbox" id="chk-continuous-wake-word" onchange="toggleWakeWordListener(this.checked)">
               <span>Wake Phrase: <strong>"Hey NEXORA"</strong></span>
             </label>
+
+            <!-- Windows PC Companion Status Badge & Launcher Button -->
+            <button class="btn btn-secondary btn-sm" id="btn-pc-companion-status" onclick="openCompanionGuideModal()" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;" title="Check connection to local Windows PC companion for native app control">
+              <span id="companion-status-indicator" style="width:8px;height:8px;border-radius:50%;background:#9CA3AF;display:inline-block;"></span>
+              <span id="companion-status-text">PC Companion: Standby</span>
+            </button>
           </div>
 
           <!-- Live Interaction Displays -->
@@ -2272,6 +2278,69 @@ print(f"Prime numbers up to 50: {calculate_primes()}")
       <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:10px;">
         <button class="btn btn-secondary btn-sm" onclick="closeMicPermissionModal()">Cancel</button>
         <button class="btn btn-primary btn-sm" onclick="requestMicrophoneAccessAgain()">Grant Permission & Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Local Windows PC Companion Guide & Control -->
+  <div class="modal-overlay" id="modal-pc-companion" style="display:none;align-items:center;justify-content:center;z-index:9999;">
+    <div class="modal-card" style="max-width:540px;width:90%;border-radius:16px;background:var(--color-bg-card);border:1px solid var(--color-border);padding:26px;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(139,92,246,0.15);display:flex;align-items:center;justify-content:center;color:var(--color-primary-light);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title" style="margin:0;font-size:18px;">Windows PC Companion</h3>
+            <p style="margin:2px 0 0 0;font-size:12px;color:var(--color-text-secondary);">Native desktop control & hardware diagnostics</p>
+          </div>
+        </div>
+        <button class="btn-icon-sm" onclick="closeCompanionGuideModal()" style="border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--color-text-muted);">&times;</button>
+      </div>
+
+      <!-- Live Companion Status Banner -->
+      <div id="modal-companion-live-status" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid var(--color-border);margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="modal-companion-dot" style="width:10px;height:10px;border-radius:50%;background:#9CA3AF;display:inline-block;"></span>
+          <span id="modal-companion-status-label" style="font-size:13.5px;font-weight:600;">Status: Standby (Offline)</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="checkCompanionHealth()" style="font-size:11.5px;padding:4px 10px;">Refresh</button>
+      </div>
+
+      <!-- System Metrics Display (Visible when companion is online) -->
+      <div id="modal-companion-metrics-card" style="display:none;padding:12px 14px;border-radius:8px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);font-size:12.5px;color:var(--color-text-main);margin-bottom:16px;">
+        <div style="font-weight:700;color:#10B981;margin-bottom:6px;">📊 Live Windows Diagnostics:</div>
+        <div id="modal-companion-metrics-text" style="line-height:1.6;font-family:monospace;font-size:12px;"></div>
+      </div>
+
+      <!-- Quick Command / Setup Guide -->
+      <p style="font-size:13px;line-height:1.5;color:var(--color-text-secondary);margin-bottom:10px;">
+        To open native desktop applications (Notepad, Calculator, File Explorer) or query CPU/RAM stats directly from voice, launch the authenticated local companion on your Windows machine:
+      </p>
+
+      <div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.3);border:1px solid var(--color-border);border-radius:8px;padding:8px 12px;margin-bottom:16px;">
+        <code style="flex:1;font-size:12.5px;color:#A78BFA;user-select:all;" id="companion-cmd-text">python bin/pc_companion.py</code>
+        <button class="btn btn-secondary btn-sm" onclick="copyCompanionCommand()" style="font-size:11px;padding:4px 8px;">Copy</button>
+      </div>
+
+      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--color-border);border-radius:8px;padding:12px;font-size:12px;color:var(--color-text-secondary);margin-bottom:18px;">
+        <strong style="color:var(--color-text-main);display:block;margin-bottom:4px;">🛡️ Safe Allowlisted Actions:</strong>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <span>• <code>"Open Notepad"</code></span>
+          <span>• <code>"Open Calculator"</code></span>
+          <span>• <code>"Open File Explorer"</code></span>
+          <span>• <code>"Check System Stats"</code></span>
+          <span>• <code>"Open Terminal"</code></span>
+          <span>• <code>"Check Battery"</code></span>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-secondary btn-sm" onclick="closeCompanionGuideModal()">Close</button>
       </div>
     </div>
   </div>

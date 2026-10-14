@@ -395,6 +395,7 @@ class VoicePipelineResponse(BaseModel):
     durationSeconds: Optional[float] = None
     model: str
     action: Optional[Dict[str, Any]] = None
+    conversationId: Optional[str] = None
 
     def __init__(self, **data):
         super().__init__(**data)

@@ -2173,6 +2173,9 @@ let voiceEngine = 'browser'; // 'browser' | 'backend'
 let voiceLang = 'en-IN';
 let waveformCanvasAnimId = null;
 let lastWakeActivationTime = 0;
+let activeVoiceConversationId = null;
+let isPcCompanionOnline = false;
+let pcCompanionHealthInterval = null;
 
 // Setup Phase 5 Voice Assistant Workspace & Chat Mic Fallback
 function setupVoiceWorkspace() {
@@ -2181,6 +2184,11 @@ function setupVoiceWorkspace() {
   initVoiceVoicesList();
   setupLegacyChatVoiceRecordModal();
   setupKeyboardHotkeys();
+  checkCompanionHealth();
+
+  if (!pcCompanionHealthInterval) {
+    pcCompanionHealthInterval = setInterval(checkCompanionHealth, 12000);
+  }
 
   // If voices not yet loaded, wait for event
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -2613,11 +2621,16 @@ async function sendVoiceQueryToPipeline(query) {
     const payload = {
       text: query,
       voice: 'onyx',
-      model: 'default'
+      model: 'default',
+      conversationId: activeVoiceConversationId
     };
 
     const res = await window.voiceApi.pipeline(payload);
-    const replyText = res.text || 'Command acknowledged, sir.';
+    if (res.conversationId) {
+      activeVoiceConversationId = res.conversationId;
+    }
+
+    const replyText = res.aiResponseText || res.aiResponse || res.text || 'Command acknowledged, sir.';
     lastAssistantResponseText = replyText;
 
     // 1. Update Assistant Response Card
@@ -2672,8 +2685,9 @@ function handleSafePcTaskAction(action, originalQuery) {
     taskDetail.innerText = action.date || new Date().toLocaleDateString();
   } else if (type === 'WEB_SEARCH') {
     taskIcon.innerText = '🔍';
-    taskTitle.innerText = `Web Search: "${action.query}"`;
-    taskDetail.innerText = 'Click below to launch search in a new secure tab.';
+    taskTitle.innerText = `Grounded Web Search: "${action.query}"`;
+    const sourceCount = action.sources ? action.sources.length : 0;
+    taskDetail.innerText = sourceCount > 0 ? `Synthesized from ${sourceCount} verified citations.` : 'Click below to view full search results.';
     const searchBtn = document.createElement('a');
     searchBtn.href = action.url;
     searchBtn.target = '_blank';
@@ -2697,9 +2711,50 @@ function handleSafePcTaskAction(action, originalQuery) {
     launchBtn.innerText = `Open ${action.siteName || 'Site'}`;
     actionBtnContainer.appendChild(launchBtn);
   } else if (type === 'SECURITY_NOTICE') {
-    taskIcon.innerText = '🛡️';
-    taskTitle.innerText = 'Security Sandbox Boundary';
-    taskDetail.innerText = action.message || 'Direct Windows file or executable execution restricted without local companion.';
+    if (action.companionEligible && action.companionAction) {
+      const comp = action.companionAction;
+      if (isPcCompanionOnline) {
+        taskIcon.innerText = '⚡';
+        taskTitle.innerText = `Windows Control: ${comp.appName || comp.target || 'Application'}`;
+        taskDetail.innerText = `Local PC companion is connected. Ready to execute on your Windows desktop.`;
+        const runBtn = document.createElement('button');
+        runBtn.className = 'btn btn-primary btn-sm';
+        runBtn.style.fontSize = '12px';
+        runBtn.style.padding = '4px 12px';
+        runBtn.innerText = `Launch ${comp.appName || 'App'}`;
+        runBtn.onclick = async () => {
+          runBtn.disabled = true;
+          runBtn.innerText = 'Executing...';
+          const res = await window.pcCompanionApi.executeAction(comp.action, comp.target, true);
+          if (res.ok && res.success) {
+            taskDetail.innerText = res.message || `Successfully launched on Windows.`;
+            runBtn.innerText = 'Launched ✓';
+            window.showToast(res.message, 'success', 2500);
+          } else {
+            taskDetail.innerText = res.error || res.message || 'Execution failed.';
+            runBtn.innerText = 'Retry';
+            runBtn.disabled = false;
+            window.showToast(res.error || 'Execution blocked', 'error');
+          }
+        };
+        actionBtnContainer.appendChild(runBtn);
+      } else {
+        taskIcon.innerText = '🖥️';
+        taskTitle.innerText = `Local PC Companion Required`;
+        taskDetail.innerText = `To launch ${comp.appName || 'desktop apps'} on Windows, run: python bin/pc_companion.py`;
+        const guideBtn = document.createElement('button');
+        guideBtn.className = 'btn btn-secondary btn-sm';
+        guideBtn.style.fontSize = '12px';
+        guideBtn.style.padding = '4px 12px';
+        guideBtn.innerText = 'Companion Setup';
+        guideBtn.onclick = openCompanionGuideModal;
+        actionBtnContainer.appendChild(guideBtn);
+      }
+    } else {
+      taskIcon.innerText = '🛡️';
+      taskTitle.innerText = 'Security Sandbox Boundary';
+      taskDetail.innerText = action.message || 'Direct Windows file or executable execution restricted without local companion.';
+    }
   } else {
     taskCard.style.display = 'none';
   }
@@ -2944,11 +2999,103 @@ async function handleWakeGreeting() {
 }
 
 async function executeWakeWordGreeting() {
-  window.showToast('🎙️ "Hey NEXORA" detected! Listening to your command...', 'info', 2000);
-  const greetText = 'Yes sir, I am listening.';
-  const responseCard = document.getElementById('voice-assistant-response');
-  if (responseCard) responseCard.innerText = greetText;
-  await speakAssistantResponse(greetText);
+  try {
+    updateJarvisStatus('speaking', 'Greeting user...');
+    const res = await window.voiceApi.wakeGreet({ voice: 'onyx' });
+    const greetText = res.greetingText || res.greeting || "Yes? I'm listening.";
+    lastAssistantResponseText = greetText;
+    const responseCard = document.getElementById('voice-assistant-response');
+    if (responseCard) responseCard.innerText = greetText;
+
+    window.showToast(`🎙️ ${greetText}`, 'info', 2500);
+
+    if (res.audioUrl && voiceEngine === 'backend') {
+      const audio = new Audio(res.audioUrl);
+      currentPlayingAudio = audio;
+      audio.volume = voiceVolume;
+      audio.onended = () => {
+        currentPlayingAudio = null;
+        updateJarvisStatus('listening', 'Listening for your command...');
+      };
+      await audio.play().catch(e => {
+        console.warn('Backend audio auto-play fallback:', e);
+        speakAssistantResponse(greetText);
+      });
+    } else {
+      await speakAssistantResponse(greetText);
+    }
+  } catch (err) {
+    console.warn('[WakeGreet] Dynamic greeting fallback:', err);
+    await speakAssistantResponse("Yes? I'm listening.");
+  }
+}
+
+// Windows PC Companion UI & Health Probes
+async function checkCompanionHealth() {
+  const statusIndicator = document.getElementById('companion-status-indicator');
+  const statusText = document.getElementById('companion-status-text');
+  const modalDot = document.getElementById('modal-companion-dot');
+  const modalLabel = document.getElementById('modal-companion-status-label');
+  const metricsCard = document.getElementById('modal-companion-metrics-card');
+  const metricsText = document.getElementById('modal-companion-metrics-text');
+
+  if (!window.pcCompanionApi) return;
+
+  try {
+    const res = await window.pcCompanionApi.checkStatus();
+    isPcCompanionOnline = !!res.online;
+
+    if (isPcCompanionOnline) {
+      if (statusIndicator) statusIndicator.style.background = '#10B981';
+      if (statusText) statusText.innerText = 'PC Companion: Connected';
+      if (modalDot) modalDot.style.background = '#10B981';
+      if (modalLabel) modalLabel.innerText = `Status: Connected (${res.os || 'Windows'} — Local Control Active)`;
+
+      // Fetch live system metrics
+      const statsRes = await window.pcCompanionApi.getSystemStats();
+      if (statsRes && statsRes.metrics && metricsCard && metricsText) {
+        metricsCard.style.display = 'block';
+        const m = statsRes.metrics;
+        const cpu = m.cpuPercent !== undefined ? `${m.cpuPercent}%` : 'Normal';
+        const ram = m.ram && m.ram.percentUsed !== undefined ? `${m.ram.percentUsed}% (${m.ram.usedMB}MB / ${m.ram.totalMB}MB)` : 'Normal';
+        const disk = m.disk && m.disk.percentUsed !== undefined ? `${m.disk.percentUsed}% (${m.disk.freeGB}GB free)` : 'Available';
+        const bat = m.battery ? (m.battery.percent !== undefined ? `${m.battery.percent}% (${m.battery.status})` : m.battery.status) : 'AC';
+        metricsText.innerHTML = `• CPU Load: <strong>${cpu}</strong><br>• RAM Usage: <strong>${ram}</strong><br>• Disk Usage: <strong>${disk}</strong><br>• Power: <strong>${bat}</strong>`;
+      }
+    } else {
+      if (statusIndicator) statusIndicator.style.background = '#9CA3AF';
+      if (statusText) statusText.innerText = 'PC Companion: Standby';
+      if (modalDot) modalDot.style.background = '#9CA3AF';
+      if (modalLabel) modalLabel.innerText = 'Status: Standby (Run python bin/pc_companion.py)';
+      if (metricsCard) metricsCard.style.display = 'none';
+    }
+  } catch (e) {
+    if (statusIndicator) statusIndicator.style.background = '#9CA3AF';
+    if (statusText) statusText.innerText = 'PC Companion: Standby';
+    if (modalDot) modalDot.style.background = '#9CA3AF';
+    if (modalLabel) modalLabel.innerText = 'Status: Standby (Run python bin/pc_companion.py)';
+    if (metricsCard) metricsCard.style.display = 'none';
+  }
+}
+
+function openCompanionGuideModal() {
+  const modal = document.getElementById('modal-pc-companion');
+  if (modal) modal.style.display = 'flex';
+  checkCompanionHealth();
+}
+
+function closeCompanionGuideModal() {
+  const modal = document.getElementById('modal-pc-companion');
+  if (modal) modal.style.display = 'none';
+}
+
+function copyCompanionCommand() {
+  const cmd = 'python bin/pc_companion.py';
+  navigator.clipboard.writeText(cmd).then(() => {
+    window.showToast('Launcher command copied! Paste into terminal.', 'success', 2200);
+  }).catch(() => {
+    window.showToast(cmd, 'info', 3000);
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -3317,6 +3464,10 @@ window.copyAssistantResponse = copyAssistantResponse;
 window.toggleFloatingVoiceCard = toggleFloatingVoiceCard;
 window.toggleFloatingVoiceListening = toggleFloatingVoiceListening;
 window.initJarvisVoiceHud = initJarvisVoiceHud;
+window.checkCompanionHealth = checkCompanionHealth;
+window.openCompanionGuideModal = openCompanionGuideModal;
+window.closeCompanionGuideModal = closeCompanionGuideModal;
+window.copyCompanionCommand = copyCompanionCommand;
 
 /* ==========================================================================
    PHASE 6: PROJECTS WORKSPACE & LONG-TERM ORGANIZATION CONTROLLER

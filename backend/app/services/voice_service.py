@@ -361,24 +361,49 @@ class VoiceService:
             "restart pc", "reboot pc", "format drive", "kill process", "cmd.exe", "powershell"
         ]
         if any(act in clean_q for act in restricted_system_actions) or re.search(r'\b(?:delete|format|rmdir|del)\s+', clean_q):
+            companion_action = None
+            if "notepad" in clean_q:
+                companion_action = {"action": "launch_app", "target": "notepad", "appName": "Notepad"}
+            elif any(c in clean_q for c in ["calc", "calculator"]):
+                companion_action = {"action": "launch_app", "target": "calculator", "appName": "Calculator"}
+            elif any(c in clean_q for c in ["explorer", "file explorer"]):
+                companion_action = {"action": "launch_app", "target": "explorer", "appName": "File Explorer"}
+            elif any(c in clean_q for c in ["terminal", "cmd", "command prompt"]):
+                companion_action = {"action": "launch_app", "target": "terminal", "appName": "Windows Terminal"}
+
             msg = "For Windows security and user permission boundaries, a web application running in a browser sandbox cannot directly execute native desktop applications or modify files on your computer. An authenticated local PC companion service is required for native desktop automation."
             return (
                 msg,
                 {
                     "type": "SECURITY_NOTICE",
                     "detail": "DESKTOP_AUTOMATION_BOUNDARY",
-                    "message": msg
+                    "message": msg,
+                    "companionEligible": companion_action is not None,
+                    "companionAction": companion_action
                 }
             )
 
-        # 6. Assistant Identity
+        # 6. Windows System Diagnostics via Companion
+        if any(p in clean_q for p in ["system stats", "pc stats", "check battery", "check ram", "check cpu", "system diagnostics"]):
+            return (
+                "Retrieving Windows system metrics through your local PC companion.",
+                {
+                    "type": "SECURITY_NOTICE",
+                    "detail": "DESKTOP_AUTOMATION_BOUNDARY",
+                    "message": "Windows hardware metrics require local companion connection.",
+                    "companionEligible": True,
+                    "companionAction": {"action": "system_stats", "appName": "Windows System Diagnostics"}
+                }
+            )
+
+        # 7. Assistant Identity
         if any(p in clean_q for p in ["who are you", "what is your name", "who created you"]):
             return (
                 "I am NEXORA AI, your conversational PC assistant. I can answer questions, search the web, check the time, open allowed websites, and assist with coding and research. Say 'Hey NEXORA' or click the microphone orb to speak.",
                 {"type": "IDENTITY"}
             )
 
-        # 7. System Health / Status
+        # 8. System Health / Status
         if any(p in clean_q for p in ["system status", "system health", "health check"]):
             return (
                 "NEXORA AI systems are fully operational. Voice intelligence, secure sandbox execution, and persistent security defenses are active.",
@@ -394,15 +419,20 @@ class VoiceService:
         text_query: Optional[str] = None,
         voice: str = "onyx",
         model: Optional[str] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        conversation_id: Optional[str] = None
     ) -> VoicePipelineResponse:
         """
         Full Voice-to-Voice Pipeline:
         1. Speech-to-Text (Transcribe user audio prompt or accept direct text query)
-        2. Safe PC Task Evaluation (time, date, web search, safe URL open, boundary notices)
-        3. NEXORA AI Reasoning Engine (Generate AI response if not a static task)
-        4. Text-to-Speech (Synthesize response into playable audio)
+        2. Safe PC Task Evaluation (time, date, web search, safe URL open, companion actions, boundary notices)
+        3. Real Web Search execution if query requested search
+        4. Context-Aware NEXORA AI Reasoning Engine (multi-turn memory & personalization)
+        5. Spoken Speech Audio Synthesis (mature adult male tone)
+        6. Persistent storage into conversation history
         """
+        import re
+
         if text_query and text_query.strip():
             user_query = text_query.strip()
         elif audio_bytes and len(audio_bytes) > 0:
@@ -417,21 +447,76 @@ class VoiceService:
         # Step 2: Check for safe PC task intents
         pc_task_result = self.evaluate_pc_task(user_query)
         action_data = None
+        active_conv_id = conversation_id
 
         if pc_task_result:
             ai_response_text, action_data = pc_task_result
             model_used = "nexora-pc-assistant"
+
+            # Execute real grounded search if web search intent
+            if action_data and action_data.get("type") == "WEB_SEARCH" and action_data.get("query"):
+                try:
+                    from backend.app.services.search_service import search_service
+                    search_res = await search_service.search_and_synthesize(
+                        query=action_data["query"],
+                        max_results=3,
+                        model=model
+                    )
+                    if search_res and search_res.synthesis:
+                        ai_response_text = search_res.synthesis
+                        action_data["synthesis"] = search_res.synthesis
+                        action_data["sources"] = [s.model_dump() for s in search_res.sources]
+                        model_used = search_res.model or "nexora-deep-search"
+                except Exception as err:
+                    logger.warning(f"Voice web search execution error, using static fallback: {err}")
         else:
-            # Step 3: Query AI reasoning engine
+            # Step 3: Load personalized user context & controlled active memories
+            personalized_context = ""
+            try:
+                from backend.app.services.personalization_service import personalization_service
+                personalized_context = await personalization_service.build_personalized_context(user_id)
+            except Exception as e:
+                logger.warning(f"Could not load personalization context for voice: {e}")
+
+            # Step 4: Multi-turn conversation retrieval & management
+            from backend.app.services.chat_service import chat_service
+            recent_messages = []
+
+            if active_conv_id:
+                try:
+                    conv_data = await chat_service.get_conversation(user_id=user_id, conversation_id=active_conv_id)
+                    msgs = conv_data.get("messages", [])
+                    for m in msgs[-6:]:
+                        if m.get("role") in ["user", "assistant"] and m.get("content"):
+                            recent_messages.append({"role": m["role"], "content": m["content"]})
+                except Exception as e:
+                    logger.warning(f"Could not fetch conversation history for voice: {e}")
+            else:
+                try:
+                    user_convs = await chat_service.get_user_conversations(user_id=user_id, limit=5)
+                    for c in user_convs:
+                        if "voice" in c.get("title", "").lower():
+                            active_conv_id = c["id"]
+                            break
+                    if not active_conv_id:
+                        new_conv = await chat_service.create_conversation(
+                            user_id=user_id,
+                            title="NEXORA Voice Session",
+                            model=model or "default"
+                        )
+                        active_conv_id = new_conv["id"]
+                except Exception as e:
+                    logger.warning(f"Could not auto-create voice conversation: {e}")
+
             sys_prompt = system_prompt or (
-                "You are NEXORA AI, a sophisticated, mature, and helpful PC voice assistant. "
+                "You are NEXORA AI, a sophisticated, mature, and helpful PC voice assistant inspired by JARVIS. "
                 "Respond clearly, concisely, and naturally. Keep answers brief (typically 1 to 3 sentences) "
-                "unless the user asks for a detailed explanation, making it ideal for spoken dialogue."
+                "unless the user asks for a detailed explanation or code, making it ideal for spoken dialogue.\n\n"
+                f"{personalized_context}"
             )
-            messages = [
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_query}
-            ]
+            messages = [{"role": "system", "content": sys_prompt}]
+            messages.extend(recent_messages)
+            messages.append({"role": "user", "content": user_query})
 
             ai_response_text, model_used = await ai_manager.generate_response(
                 messages=messages,
@@ -439,12 +524,45 @@ class VoiceService:
                 system_prompt=sys_prompt
             )
 
-        # Step 4: Synthesize text response into speech
+        # Step 5: Save turn to persistent chat history for continuity
+        if active_conv_id:
+            try:
+                from backend.app.services.chat_service import chat_service
+                await chat_service.add_message(
+                    user_id=user_id,
+                    conversation_id=active_conv_id,
+                    role="user",
+                    content=user_query,
+                    model=model_used
+                )
+                await chat_service.add_message(
+                    user_id=user_id,
+                    conversation_id=active_conv_id,
+                    role="assistant",
+                    content=ai_response_text,
+                    model=model_used
+                )
+            except Exception as e:
+                logger.warning(f"Could not persist voice messages: {e}")
+
+        # Step 6: Format text for speech synthesis
+        speech_text = re.sub(r'```[\s\S]*?```', 'Code omitted for speech. See visual display.', ai_response_text)
+        speech_text = re.sub(r'https?://\S+', '', speech_text)
+        speech_text = re.sub(r'\[\d+\]', '', speech_text)
+        speech_text = re.sub(r'[#*`_~]', '', speech_text).strip()
+        if not speech_text:
+            speech_text = ai_response_text[:300]
+
+        sentences = re.split(r'(?<=[.!?])\s+', speech_text)
+        if len(sentences) > 3 and len(speech_text) > 400:
+            speech_text = " ".join(sentences[:3])
+
+        # Step 7: Synthesize text response into speech
         selected_voice = voice if voice in self.SUPPORTED_VOICES else self.DEFAULT_VOICE
         tts_res = await self.synthesize_speech(
             user_id=user_id,
             req=VoiceSynthesizeRequest(
-                text=ai_response_text[:1000],
+                text=speech_text[:1000],
                 voice=selected_voice,
                 speed=1.0,
                 model="tts-1"
@@ -459,7 +577,8 @@ class VoiceService:
             audioBase64=tts_res.audioBase64,
             durationSeconds=tts_res.durationSeconds,
             model=model_used,
-            action=action_data
+            action=action_data,
+            conversationId=active_conv_id
         )
 
     async def get_audio_file_path(self, user_id: str, audio_id: str) -> Path:

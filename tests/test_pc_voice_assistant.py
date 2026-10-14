@@ -231,3 +231,116 @@ def test_zero_secrets_leakage_in_voice_responses(client):
     assert "database_url" not in text_content
     assert "openai_api_key" not in text_content
     assert "render_api_key" not in text_content
+
+
+@pytest.mark.asyncio
+async def test_wake_greet_with_custom_display_name(client):
+    """Verify wake greet extracts customized user display name from personalization profile."""
+    from backend.app.services.personalization_service import personalization_service
+    from backend.app.models import UserPreferencesRequest
+
+    user = await get_test_auth_user()
+    await personalization_service.update_preferences(
+        user["userId"],
+        UserPreferencesRequest(displayName="Vikram")
+    )
+
+    resp = client.post("/api/voice/wake-greet", json={"voice": "onyx"}, headers=user["auth_headers"])
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "Vikram" in data["greeting"]
+    assert data["userName"] == "Vikram"
+    assert "Yes, Vikram? I'm listening." == data["greeting"]
+
+
+@pytest.mark.asyncio
+async def test_multi_turn_voice_pipeline_continuity(client):
+    """Verify voice pipeline maintains conversationId, context continuity, and chat history persistence."""
+    from backend.app.services.chat_service import chat_service
+
+    user = await get_test_auth_user()
+    
+    # Turn 1: User introduces a fact
+    req1 = {
+        "text": "Hello, my favorite programming language is Rust.",
+        "voice": "onyx"
+    }
+    resp1 = client.post("/api/voice/pipeline", json=req1, headers=user["auth_headers"])
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    conv_id = data1.get("conversationId")
+    assert conv_id is not None
+
+    # Turn 2: User asks follow-up referencing turn 1 using conversationId
+    req2 = {
+        "text": "What was my favorite programming language that I just mentioned?",
+        "voice": "onyx",
+        "conversationId": conv_id
+    }
+    resp2 = client.post("/api/voice/pipeline", json=req2, headers=user["auth_headers"])
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2.get("conversationId") == conv_id
+
+    # Verify both turns are persisted in database messages
+    conv_history = await chat_service.get_conversation(user["userId"], conv_id)
+    assert len(conv_history["messages"]) >= 4
+    contents = [m["content"].lower() for m in conv_history["messages"]]
+    assert any("rust" in c for c in contents)
+
+
+@pytest.mark.asyncio
+async def test_voice_pipeline_web_search_execution(client):
+    """Verify voice pipeline executes search and returns citations and synthesis."""
+    user = await get_test_auth_user()
+    req = {
+        "text": "search for Python 3.13 features on the web",
+        "voice": "onyx"
+    }
+    resp = client.post("/api/voice/pipeline", json=req, headers=user["auth_headers"])
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("action") is not None
+    assert data["action"]["type"] == "WEB_SEARCH"
+    assert "python" in data["action"]["url"].lower()
+
+
+def test_pc_companion_protocol_and_security_validation():
+    """Verify Windows PC companion diagnostics, command allowlisting, and confirmation gates."""
+    from backend.app.companion import (
+        get_windows_system_metrics,
+        execute_pc_action,
+        ALLOWED_APPS
+    )
+
+    # 1. System metrics retrieval
+    metrics = get_windows_system_metrics()
+    assert "os" in metrics
+    assert "disk" in metrics
+    assert "timestamp" in metrics
+
+    # 2. System stats action
+    ok, msg, extra = execute_pc_action("system_stats")
+    assert ok is True
+    assert "Windows Diagnostics" in msg
+    assert extra["type"] == "SYSTEM_STATS"
+
+    # 3. Confirmation gate for sensitive apps (e.g. terminal)
+    ok_term, msg_term, extra_term = execute_pc_action("launch_app", "terminal", confirmed=False)
+    assert ok_term is False
+    assert extra_term.get("requiresConfirmation") is True
+
+    # 4. Strictly block arbitrary executables or command injection
+    ok_bad, msg_bad, _ = execute_pc_action("launch_app", "cmd.exe; rm -rf /")
+    assert ok_bad is False
+    assert "not in the verified allowlist" in msg_bad
+
+    ok_malware, msg_malware, _ = execute_pc_action("launch_app", "malware.exe")
+    assert ok_malware is False
+    assert "not in the verified allowlist" in msg_malware
+
+    # 5. Strictly block arbitrary actions
+    ok_act, msg_act, _ = execute_pc_action("format_hard_drive")
+    assert ok_act is False
+    assert "Unrecognized action" in msg_act
+

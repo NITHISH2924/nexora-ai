@@ -14,6 +14,7 @@ from backend.app.models import (
     VoiceStatusResponse
 )
 from backend.app.services.voice_service import voice_service
+from backend.app.services.personalization_service import personalization_service
 
 logger = logging.getLogger("routes.voice")
 router = APIRouter(prefix="/api/voice", tags=["Voice Intelligence & Audio Streaming"])
@@ -42,9 +43,19 @@ async def wake_word_greeting(
     if payload and isinstance(payload, dict):
         voice = payload.get("voice", "onyx")
 
+    user_id = current_user["userId"]
+    full_name = current_user.get("fullName")
+
+    try:
+        prefs = await personalization_service.get_preferences(user_id)
+        if prefs and prefs.displayName and prefs.displayName.strip():
+            full_name = prefs.displayName.strip()
+    except Exception as e:
+        logger.warning(f"Error fetching user preferences for wake greeting: {e}")
+
     return await voice_service.generate_wake_greeting(
-        user_id=current_user["userId"],
-        full_name=current_user.get("fullName"),
+        user_id=user_id,
+        full_name=full_name,
         voice=voice
     )
 
@@ -136,7 +147,8 @@ async def voice_pipeline(
         text_query=req.text,
         voice=req.voice or "onyx",
         model=req.model,
-        system_prompt=req.systemPrompt
+        system_prompt=req.systemPrompt,
+        conversation_id=req.conversationId
     )
 
 @router.get("/audio/{audio_id}")
