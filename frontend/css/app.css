@@ -3155,6 +3155,10 @@
   z-index: 10;
 }
 
+.jarvis-orb-center svg {
+  pointer-events: none;
+}
+
 .jarvis-orb-center:hover {
   transform: scale(1.06);
   border-color: #A78BFA;
@@ -3193,6 +3197,18 @@
   border-color: #FBBF24;
   box-shadow: 0 0 35px rgba(245, 158, 11, 0.6), inset 0 0 20px rgba(251, 191, 36, 0.4);
   animation: jarvisProcessingSpin 2s linear infinite;
+}
+
+.jarvis-orb-container.state-success .jarvis-orb-center {
+  background: radial-gradient(circle at 35% 35%, #10B981 0%, #047857 55%, #064E3B 100%);
+  border-color: #34D399;
+  box-shadow: 0 0 42px rgba(16, 185, 129, 0.75), inset 0 0 22px rgba(52, 211, 153, 0.5);
+  animation: jarvisPulseGlow 1.4s ease-in-out infinite alternate;
+}
+
+.jarvis-orb-container.state-success .ring-outer {
+  border-color: rgba(52, 211, 153, 0.6);
+  animation-duration: 7s;
 }
 
 .jarvis-orb-container.state-speaking .jarvis-orb-center {
@@ -3269,6 +3285,16 @@
   background: #F59E0B;
   box-shadow: 0 0 8px #F59E0B;
   animation: micBlink 0.8s infinite;
+}
+
+.jarvis-status-badge.state-success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #34D399;
+}
+.jarvis-status-badge.state-success .status-indicator-dot {
+  background: #10B981;
+  box-shadow: 0 0 10px #10B981;
 }
 
 .jarvis-status-badge.state-speaking {

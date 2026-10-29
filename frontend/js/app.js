@@ -2155,9 +2155,10 @@ let voiceStream = null;
 let currentPlayingAudio = null;
 
 // JARVIS Assistant State Machine
-let jarvisVoiceState = 'idle'; // 'idle' | 'listening' | 'processing' | 'speaking' | 'paused' | 'error'
+let jarvisVoiceState = 'idle'; // 'idle' | 'listening' | 'processing' | 'success' | 'speaking' | 'paused' | 'error'
 let speechRecognitionInstance = null;
 let isSpeechRecognitionActive = false;
+let isStartingVoiceListening = false;
 let isContinuousWakeWordActive = false;
 let isAssistantSpeaking = false;
 let isVoiceProcessing = false;
@@ -2185,6 +2186,23 @@ function setupVoiceWorkspace() {
   setupLegacyChatVoiceRecordModal();
   setupKeyboardHotkeys();
   checkCompanionHealth();
+
+  const orbBtn = document.getElementById('voice-room-orb-btn');
+  if (orbBtn) {
+    orbBtn.disabled = false;
+    orbBtn.onclick = (e) => {
+      if (e) e.preventDefault();
+      toggleVoiceListening();
+    };
+  }
+
+  const toggleBtn = document.getElementById('btn-voice-toggle');
+  if (toggleBtn) {
+    toggleBtn.onclick = (e) => {
+      if (e) e.preventDefault();
+      toggleVoiceListening();
+    };
+  }
 
   if (!pcCompanionHealthInterval) {
     pcCompanionHealthInterval = setInterval(checkCompanionHealth, 12000);
@@ -2421,6 +2439,9 @@ function updateJarvisStatus(state, customMessage = null) {
   } else if (state === 'processing') {
     defaultMsg = 'Processing intelligence request & PC task...';
     if (btnToggleLabel) btnToggleLabel.innerText = 'Processing...';
+  } else if (state === 'success') {
+    defaultMsg = 'Command processed successfully.';
+    if (btnToggleLabel) btnToggleLabel.innerText = 'Start Listening';
   } else if (state === 'speaking') {
     defaultMsg = 'NEXORA Speaking... Press Esc or Stop to cut off';
     if (btnToggleLabel) btnToggleLabel.innerText = 'Start Listening';
@@ -2436,6 +2457,8 @@ function updateJarvisStatus(state, customMessage = null) {
 
   if (textEl) {
     textEl.innerText = customMessage || defaultMsg;
+  } else if (badge) {
+    badge.innerHTML = `<span class="status-indicator-dot"></span><span id="voice-status-text">${escapeHtml(customMessage || defaultMsg)}</span>`;
   }
 
   if (btnInterrupt) {
@@ -2464,7 +2487,7 @@ function getSpeechRecognitionConstructor() {
 function initSpeechRecognition() {
   const SpeechRec = getSpeechRecognitionConstructor();
   if (!SpeechRec) {
-    console.warn('[SpeechRec] SpeechRecognition API not supported in this browser.');
+    console.warn('[NEXORA Voice] SpeechRecognition API not supported in this browser.');
     return null;
   }
 
@@ -2478,13 +2501,16 @@ function initSpeechRecognition() {
     rec.lang = voiceLang || 'en-IN';
 
     rec.onstart = () => {
+      console.info('[NEXORA Voice] Speech recognition started (onstart).');
       isSpeechRecognitionActive = true;
+      isStartingVoiceListening = false;
       if (!isAssistantSpeaking && !isVoiceProcessing && !isWakeWordPaused) {
         updateJarvisStatus('listening');
       }
     };
 
     rec.onresult = (event) => {
+      console.info('[NEXORA Voice] Speech recognition result received.');
       handleSpeechRecognitionResult(event);
     };
 
@@ -2493,7 +2519,9 @@ function initSpeechRecognition() {
     };
 
     rec.onend = () => {
+      console.info('[NEXORA Voice] Speech recognition ended (onend).');
       isSpeechRecognitionActive = false;
+      isStartingVoiceListening = false;
       // Auto-restart if continuous wake word enabled and not explicitly stopped or speaking
       if (isContinuousWakeWordActive && !isWakeWordPaused && !isAssistantSpeaking && !isVoiceProcessing) {
         setTimeout(() => {
@@ -2513,7 +2541,7 @@ function initSpeechRecognition() {
     speechRecognitionInstance = rec;
     return rec;
   } catch (err) {
-    console.error('[SpeechRec] Initialization failed:', err);
+    console.error('[NEXORA Voice] Speech recognition initialization failed:', err.name, err.message);
     return null;
   }
 }
@@ -2589,19 +2617,34 @@ function handleSpeechRecognitionResult(event) {
 }
 
 function handleSpeechRecognitionError(event) {
-  console.warn('[SpeechRec] Recognition event error:', event.error);
-  if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+  const errorType = event ? event.error : 'unknown';
+  console.warn('[NEXORA Voice] Recognition error event:', errorType);
+  isSpeechRecognitionActive = false;
+  isStartingVoiceListening = false;
+
+  if (errorType === 'not-allowed' || errorType === 'service-not-allowed') {
     openMicPermissionModal();
     updateJarvisStatus('error', 'Microphone permission denied. Click to grant access.');
-  } else if (event.error === 'no-speech') {
-    // Normal timeout when no speech is detected; silently ignore
+    window.showToast('Microphone access denied. Please allow microphone permissions in browser settings.', 'error', 4500);
+  } else if (errorType === 'audio-capture') {
+    updateJarvisStatus('error', 'No microphone detected or audio capture failed.');
+    window.showToast('No microphone found or audio capture failed. Check audio hardware settings.', 'error', 4500);
+  } else if (errorType === 'network') {
+    updateJarvisStatus('error', 'Speech recognition network error. Check connection and retry.');
+    window.showToast('Speech recognition network timeout or connection error. Please retry.', 'warning', 3500);
+  } else if (errorType === 'no-speech') {
+    // Normal timeout when no speech is detected; silently transition to idle if one-shot
     if (!isContinuousWakeWordActive && jarvisVoiceState === 'listening') {
+      updateJarvisStatus('idle', 'No speech detected. Click Orb to speak.');
+    }
+  } else if (errorType === 'aborted') {
+    console.info('[NEXORA Voice] Speech recognition aborted.');
+    if (jarvisVoiceState === 'listening') {
       updateJarvisStatus('idle');
     }
-  } else if (event.error === 'network') {
-    window.showToast('Speech recognition network timeout. Retrying...', 'warning', 2500);
   } else {
-    updateJarvisStatus('idle');
+    updateJarvisStatus('error', `Voice recognition error: ${errorType}`);
+    window.showToast(`Speech recognition error: ${errorType}`, 'warning', 3500);
   }
 }
 
@@ -2646,13 +2689,19 @@ async function sendVoiceQueryToPipeline(query) {
     const replayBtn = document.getElementById('btn-voice-replay');
     if (replayBtn) replayBtn.style.display = 'inline-flex';
 
-    // 4. Speak Assistant Reply in natural Indian-English Male Voice
+    // 4. Update UI visibly to Success
+    updateJarvisStatus('success', 'Voice request processed successfully.');
+
+    // Allow the success state to be visibly perceived before assistant speaks
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // 5. Speak Assistant Reply in natural Indian-English Male Voice
     isVoiceProcessing = false;
     await speakAssistantResponse(replyText);
 
   } catch (err) {
     isVoiceProcessing = false;
-    console.error('[VoicePipeline] Error executing voice query:', err);
+    console.error('[NEXORA Voice] Error executing voice query:', err.message);
     updateJarvisStatus('error', `Failed: ${err.message}`);
     window.showToast(`Voice assistant error: ${err.message}`, 'error', 3500);
   }
@@ -2911,31 +2960,109 @@ function toggleMuteAudio() {
 // --------------------------------------------------------------------------
 // 6. Voice Listening Toggles & Wake Word Handlers
 // --------------------------------------------------------------------------
-function toggleVoiceListening() {
-  const rec = initSpeechRecognition();
-  if (!rec) {
-    window.showToast('Speech recognition not available. Please use Google Chrome or Microsoft Edge on Windows.', 'error', 4000);
-    return;
+function stopVoiceListening() {
+  console.info('[NEXORA Voice] Stop listening invoked.');
+  isStartingVoiceListening = false;
+  if (speechRecognitionInstance) {
+    try {
+      speechRecognitionInstance.stop();
+    } catch (e) {
+      try { speechRecognitionInstance.abort(); } catch (_) {}
+    }
   }
+  isSpeechRecognitionActive = false;
+  if (jarvisVoiceState === 'listening') {
+    updateJarvisStatus('idle', 'Listening stopped.');
+  }
+}
 
-  if (isAssistantSpeaking) {
+async function toggleVoiceListening() {
+  console.info('[NEXORA Voice] Listening orb clicked - state:', jarvisVoiceState, 'recognitionActive:', isSpeechRecognitionActive);
+
+  // 1. Interrupt assistant speech output if currently speaking
+  if (isAssistantSpeaking || currentPlayingAudio) {
+    console.info('[NEXORA Voice] Assistant was speaking; stopping speech output.');
     stopSpeechAudio();
     return;
   }
 
-  if (isSpeechRecognitionActive) {
+  // 2. If already listening, stop listening cleanly
+  if (isSpeechRecognitionActive || jarvisVoiceState === 'listening') {
+    stopVoiceListening();
+    return;
+  }
+
+  // 3. Prevent duplicate recognition instances from rapid repeated clicks
+  if (isStartingVoiceListening) {
+    console.info('[NEXORA Voice] Recognition start already in progress; ignoring duplicate click.');
+    return;
+  }
+
+  // 4. Verify browser speech recognition support
+  const SpeechRec = getSpeechRecognitionConstructor();
+  if (!SpeechRec) {
+    console.warn('[NEXORA Voice] Speech recognition not supported in this browser.');
+    updateJarvisStatus('error', 'Speech recognition not supported in this browser. Please use Chrome or Edge.');
+    window.showToast('Speech recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.', 'error', 5000);
+    return;
+  }
+
+  isStartingVoiceListening = true;
+
+  // 5. Request microphone permission from user click gesture
+  if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
     try {
-      rec.stop();
-    } catch (e) {}
-    isSpeechRecognitionActive = false;
-    updateJarvisStatus('idle');
-  } else {
-    try {
-      rec.start();
-      updateJarvisStatus('listening');
-    } catch (e) {
-      console.warn('[SpeechRec] Could not start speech recognition:', e);
+      console.info('[NEXORA Voice] Requesting microphone access from user gesture...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => {
+        try { track.stop(); } catch (_) {}
+      });
+      console.info('[NEXORA Voice] Microphone permission verified.');
+    } catch (permErr) {
+      isStartingVoiceListening = false;
+      console.warn('[NEXORA Voice] Microphone access error:', permErr.name);
+      if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
+        openMicPermissionModal();
+        updateJarvisStatus('error', 'Microphone permission denied. Click to grant access.');
+        window.showToast('Microphone access denied. Please allow microphone permissions in browser settings.', 'error', 4500);
+      } else if (permErr.name === 'NotFoundError' || permErr.name === 'DevicesNotFoundError') {
+        updateJarvisStatus('error', 'No microphone detected. Connect an audio input device.');
+        window.showToast('No microphone found. Please connect a microphone to your PC.', 'error', 4500);
+      } else {
+        updateJarvisStatus('error', `Microphone access error: ${permErr.message || permErr.name}`);
+        window.showToast(`Microphone error: ${permErr.message || permErr.name}`, 'error', 4000);
+      }
+      return;
     }
+  }
+
+  // 6. Initialize or retrieve speech recognition instance
+  const rec = initSpeechRecognition();
+  if (!rec) {
+    isStartingVoiceListening = false;
+    updateJarvisStatus('error', 'Speech recognition engine failed to initialize.');
+    window.showToast('Speech recognition engine failed to initialize.', 'error', 4000);
+    return;
+  }
+
+  // 7. Explicitly start speech recognition from user gesture
+  try {
+    console.info('[NEXORA Voice] Explicitly starting recognition from user click gesture...');
+    rec.start();
+    isSpeechRecognitionActive = true;
+    updateJarvisStatus('listening');
+  } catch (startErr) {
+    if (startErr.name === 'InvalidStateError') {
+      console.info('[NEXORA Voice] Recognition instance already active; synchronizing state.');
+      isSpeechRecognitionActive = true;
+      updateJarvisStatus('listening');
+    } else {
+      console.error('[NEXORA Voice] Recognition start exception:', startErr.name, startErr.message);
+      updateJarvisStatus('error', `Failed to start recognition: ${startErr.message || startErr.name}`);
+      window.showToast(`Voice assistant error: ${startErr.message || startErr.name}`, 'error', 4000);
+    }
+  } finally {
+    isStartingVoiceListening = false;
   }
 }
 
@@ -3447,6 +3574,7 @@ async function playSpeechAudio(text, btnEl = null) {
 // Window global bindings for inline HTML onclick handlers
 window.playSpeechAudio = playSpeechAudio;
 window.toggleVoiceListening = toggleVoiceListening;
+window.stopVoiceListening = stopVoiceListening;
 window.togglePauseListening = togglePauseListening;
 window.stopSpeechAudio = stopSpeechAudio;
 window.replayLastAssistantSpeech = replayLastAssistantSpeech;
@@ -4538,240 +4666,3 @@ function copyLearningOutput() {
   }
 }
 window.copyLearningOutput = copyLearningOutput;
-
-/* ==========================================================================
-   PHASE 5: HEY NEXORA PERSONALIZED VOICE ASSISTANT CONTROLLER
-   ========================================================================== */
-
-let voiceRecognition = null;
-let wakeWordRecognizer = null;
-let isVoiceListening = false;
-let currentPlayingVoiceAudio = null;
-
-async function handleWakeGreeting() {
-  try {
-    const statusBadge = document.getElementById('voice-room-status-badge');
-    const transcriptBox = document.getElementById('voice-room-transcript');
-    const floatingText = document.getElementById('floating-voice-text');
-    const floatingCard = document.getElementById('floating-voice-card');
-
-    if (statusBadge) statusBadge.innerText = 'Connecting to NEXORA voice persona...';
-    if (floatingCard) floatingCard.style.display = 'block';
-
-    const res = await window.voiceApi.wakeGreet({ voice: 'onyx' });
-    const greeting = res.greetingText || "Yes, I'm listening.";
-
-    if (transcriptBox) transcriptBox.innerHTML = `<strong>NEXORA:</strong> ${escapeHtml(greeting)}`;
-    if (floatingText) floatingText.innerText = greeting;
-    if (statusBadge) statusBadge.innerText = `Speaking: "${greeting}"`;
-
-    if (res.audioUrl) {
-      playVoiceAudio(res.audioUrl);
-    }
-    window.showToast(greeting, 'info', 3000);
-  } catch (err) {
-    console.error('Wake greeting error:', err);
-    window.showToast('Voice greeting: ' + (err.message || 'Service unavailable'), 'error');
-  }
-}
-window.handleWakeGreeting = handleWakeGreeting;
-
-function playVoiceAudio(audioUrl) {
-  stopSpeechAudio();
-  try {
-    const audio = new Audio(audioUrl);
-    currentPlayingVoiceAudio = audio;
-
-    const interruptBtn = document.getElementById('btn-voice-interrupt');
-    const floatingStopBtn = document.getElementById('btn-floating-stop');
-    if (interruptBtn) interruptBtn.style.display = 'inline-flex';
-    if (floatingStopBtn) floatingStopBtn.style.display = 'inline-flex';
-
-    audio.onended = () => {
-      stopSpeechAudio();
-      const statusBadge = document.getElementById('voice-room-status-badge');
-      if (statusBadge) statusBadge.innerText = 'Ready — Listening for follow-up...';
-    };
-
-    audio.play().catch(e => console.warn('Audio auto-play prevented:', e));
-  } catch (e) {
-    console.warn('Audio play failed:', e);
-  }
-}
-
-function stopSpeechAudio() {
-  if (currentPlayingVoiceAudio) {
-    try {
-      currentPlayingVoiceAudio.pause();
-      currentPlayingVoiceAudio.currentTime = 0;
-    } catch (_) {}
-    currentPlayingVoiceAudio = null;
-  }
-  const interruptBtn = document.getElementById('btn-voice-interrupt');
-  const floatingStopBtn = document.getElementById('btn-floating-stop');
-  if (interruptBtn) interruptBtn.style.display = 'none';
-  if (floatingStopBtn) floatingStopBtn.style.display = 'none';
-
-  const statusBadge = document.getElementById('voice-room-status-badge');
-  if (statusBadge) statusBadge.innerText = 'Idle / Stopped';
-}
-window.stopSpeechAudio = stopSpeechAudio;
-
-function toggleVoiceListening() {
-  if (isVoiceListening) {
-    stopVoiceListening();
-  } else {
-    startVoiceListening();
-  }
-}
-window.toggleVoiceListening = toggleVoiceListening;
-
-function startVoiceListening() {
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec) {
-    window.showToast('Speech Recognition not supported natively in this browser. Please use Push-to-Talk or text chat.', 'warning', 4000);
-    return;
-  }
-
-  try {
-    voiceRecognition = new SpeechRec();
-    voiceRecognition.continuous = false;
-    voiceRecognition.interimResults = false;
-    voiceRecognition.lang = 'en-US';
-
-    const statusBadge = document.getElementById('voice-room-status-badge');
-    const orb = document.getElementById('voice-room-orb-btn');
-
-    voiceRecognition.onstart = () => {
-      isVoiceListening = true;
-      if (statusBadge) statusBadge.innerText = 'Listening to your voice... Speak clearly.';
-      if (orb) orb.style.boxShadow = '0 0 50px rgba(16,185,129,0.7)';
-    };
-
-    voiceRecognition.onresult = async (event) => {
-      const speechText = event.results[0][0].transcript;
-      const transcriptBox = document.getElementById('voice-room-transcript');
-      if (transcriptBox) transcriptBox.innerHTML = `<strong>You:</strong> ${escapeHtml(speechText)}<br><em>Processing with NEXORA AI...</em>`;
-      
-      stopVoiceListening();
-      
-      try {
-        const pipelineRes = await window.voiceApi.pipeline({
-          audioBase64: btoa(speechText),
-          voice: 'onyx'
-        });
-        if (transcriptBox) {
-          transcriptBox.innerHTML = `<strong>You:</strong> ${escapeHtml(speechText)}<br><br><strong>NEXORA:</strong> ${escapeHtml(pipelineRes.aiResponse || '')}`;
-        }
-        if (pipelineRes.audioUrl) {
-          playVoiceAudio(pipelineRes.audioUrl);
-        }
-      } catch (err) {
-        if (transcriptBox) transcriptBox.innerHTML += `<br><span style="color:var(--color-danger);">${escapeHtml(err.message)}</span>`;
-      }
-    };
-
-    voiceRecognition.onerror = (event) => {
-      console.warn('Speech recognition error:', event.error);
-      stopVoiceListening();
-      if (event.error === 'not-allowed') {
-        window.showToast('Microphone permission denied. Enable microphone access in browser settings.', 'error');
-      } else {
-        window.showToast(`Voice error: ${event.error}`, 'warning');
-      }
-    };
-
-    voiceRecognition.onend = () => {
-      stopVoiceListening();
-    };
-
-    voiceRecognition.start();
-  } catch (err) {
-    console.error('Failed to start voice recognition:', err);
-    window.showToast('Microphone error: ' + err.message, 'error');
-  }
-}
-
-function stopVoiceListening() {
-  isVoiceListening = false;
-  if (voiceRecognition) {
-    try { voiceRecognition.stop(); } catch (_) {}
-    voiceRecognition = null;
-  }
-  const statusBadge = document.getElementById('voice-room-status-badge');
-  const orb = document.getElementById('voice-room-orb-btn');
-  if (statusBadge) statusBadge.innerText = 'Ready — Click Orb or Say "Hey NEXORA"';
-  if (orb) orb.style.boxShadow = '0 0 35px rgba(139,92,246,0.4)';
-}
-
-function toggleWakeWordListener(enabled) {
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec) {
-    if (enabled) window.showToast('Background wake-word detection requires Chrome or Edge.', 'warning');
-    return;
-  }
-
-  if (!enabled) {
-    if (wakeWordRecognizer) {
-      try { wakeWordRecognizer.stop(); } catch (_) {}
-      wakeWordRecognizer = null;
-    }
-    window.showToast('Hey NEXORA wake-word disabled.', 'info');
-    return;
-  }
-
-  try {
-    wakeWordRecognizer = new SpeechRec();
-    wakeWordRecognizer.continuous = true;
-    wakeWordRecognizer.interimResults = true;
-    wakeWordRecognizer.lang = 'en-US';
-
-    wakeWordRecognizer.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const transcript = event.results[i][0].transcript.toLowerCase();
-        if (transcript.includes('hey nexora') || transcript.includes('nexora')) {
-          console.log('Wake-word "Hey NEXORA" detected!');
-          handleWakeGreeting();
-          break;
-        }
-      }
-    };
-
-    wakeWordRecognizer.onerror = (e) => {
-      if (e.error !== 'no-speech') {
-        console.warn('Wake-word recognizer error:', e.error);
-      }
-    };
-
-    wakeWordRecognizer.onend = () => {
-      const chk = document.getElementById('chk-continuous-wake-word');
-      if (chk && chk.checked) {
-        try { wakeWordRecognizer.start(); } catch (_) {}
-      }
-    };
-
-    wakeWordRecognizer.start();
-    window.showToast('Listening for "Hey NEXORA" wake phrase...', 'success');
-  } catch (err) {
-    console.warn('Continuous wake-word error:', err);
-  }
-}
-window.toggleWakeWordListener = toggleWakeWordListener;
-
-function toggleFloatingVoiceCard(show) {
-  const card = document.getElementById('floating-voice-card');
-  if (card) {
-    if (show !== undefined) {
-      card.style.display = show ? 'block' : 'none';
-    } else {
-      card.style.display = card.style.display === 'none' ? 'block' : 'none';
-    }
-  }
-}
-window.toggleFloatingVoiceCard = toggleFloatingVoiceCard;
-
-function toggleFloatingVoiceListening() {
-  toggleFloatingVoiceCard(true);
-  handleWakeGreeting();
-}
-window.toggleFloatingVoiceListening = toggleFloatingVoiceListening;
